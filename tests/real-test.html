@@ -12,6 +12,9 @@ const N = null;
 const fixtures = [
   { file: 'fixtures/gercek-a6-golge.jpeg', exam: { format: 'a6', questionCount: 20, optionCount: 4 }, id: 2,
     truth: [0, 0, 1, 1, 2, 2, 3, 3, 0, 0, 2, 3, 3, 2, 2, N, N, N, N, 0] },
+  // Ortası kıvrık kâğıt: köşelerden hesaplanan konum D şıkkında ~4.5 mm, kod şeridinin sonunda ~5 mm kayar
+  { file: 'fixtures/gercek-a6-kivrik.jpeg', exam: { format: 'a6', questionCount: 15, optionCount: 4 }, id: 35,
+    truth: [0, 3, 0, 1, 1, 0, 3, N, 3, 2, N, 0, 0, 2, 0] },
 ];
 const L = 'ABCD';
 const fmtA = (a) => (a == null ? '-' : a === -1 ? '*' : L[a]);

@@ -136,12 +136,14 @@ const Store = (() => {
   const getResult = (examId, studentId) => db.results.find((r) => r.examId === examId && r.studentId === studentId);
   // booklet: okunan kitapçık indeksi; null = işaretlenmemiş, -1 = birden fazla işaret
   // uncertain: okuyucunun emin olamadığı soruların indeksleri (öğretmen kontrol etsin diye)
-  function saveResult(examId, studentId, answers, booklet = null, uncertain = []) {
+  // manual: cevaplar optik okutulmadan elle girildi
+  function saveResult(examId, studentId, answers, booklet = null, uncertain = [], manual = false) {
     let r = getResult(examId, studentId);
     if (!r) { r = { examId, studentId }; db.results.push(r); }
     r.answers = answers;
     r.booklet = booklet;
     r.uncertain = uncertain;
+    if (manual) r.manual = true; else delete r.manual;
     r.scannedAt = new Date().toISOString();
     delete r.sentAt; // sonuç değişti, veliye yeniden gönderilmeli
     delete r.sentVia;

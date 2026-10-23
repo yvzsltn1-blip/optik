@@ -7,6 +7,9 @@
 //  4. Kod şeridi gri tondan, kâğıda göre koyuluğuyla okunur (kontrol bitli).
 //  5. Izgara ince ayarı: her soru satırı, basılı yuvarlak çerçevelerine oturacak şekilde kaydırılır
 //     (kâğıt kıvrımı ve yazıcı ölçek hataları için).
+//     Bu yolla hiçbir form okunamazsa (kâğıt çok kıvrık: köşelerden hesaplanan konum şeritte ve
+//     yuvarlaklarda birkaç mm kayar) ikinci tur yapılır: kod şeridi kendi ekseninde kaydırılıp
+//     ölçeklenerek aranır, ızgara da sütun sütun geniş kaydırma ve yatay ölçekle oturtulur.
 //  6. Her yuvarlağın koyuluğu çevresindeki kâğıda göre ölçülür; dolu/boş eşiği formdan formun
 //     kendi değerleriyle (Otsu) bulunur; eşiğe çok yakın işaretler "şüpheli" olarak bildirilir.
 const OMR = (() => {
@@ -16,6 +19,11 @@ const OMR = (() => {
   const FILL_REL = 0.7;        // bir soruda en koyu işaretin bu oranından açık olanlar (silinmiş izler) yok sayılır
   const UNSURE = 0.05;         // eşiğe bu kadar yakın kararlar "şüpheli" sayılır
   const REFINE_MAX = 2.0;      // ızgara ince ayarında en fazla kaydırma (mm)
+  // İkinci tur (kıvrık kâğıt)
+  const WIDE_MAX_X = 3.5;      // en fazla yatay kaydırma (mm)
+  const WIDE_MAX_Y = 2.5;      // en fazla dikey kaydırma (mm; satır aralığının yarısından az kalmalı)
+  const SCALE_MAX = 0.15;      // satırın yatay ölçeğinde en fazla sapma
+  const SCALE_STEP = 0.04;     // ölçek adımı, kaydırma adımının (mm) bu katı
 
   function toGray(img) {
     const { data, width: w, height: h } = img;
@@ -227,17 +235,19 @@ const OMR = (() => {
   // arama bir önceki satırın kaymasından başlar; sütunun ilk satırında geniş arama yapılır.
   // Sonra sütun boyunca medyan süzgeçle tek tük sapmalar atılır.
   const RING = Array.from({ length: 8 }, (_, i) => [Math.cos(i * Math.PI / 4 + 0.39), Math.sin(i * Math.PI / 4 + 0.39)]);
+  // (cx,cy) mm merkezli çember üzerindeki ortalama gri değer; görüntü dışına taşarsa NaN
+  function ringMean(g, w, h, H, cx, cy, rad) {
+    let s = 0;
+    for (const [c, si] of RING) {
+      const v = at(g, w, h, H, cx + c * rad, cy + si * rad);
+      if (v !== v) return NaN;
+      s += v;
+    }
+    return s / RING.length;
+  }
   function refineGrid(g, w, h, H, fmt, grid) {
     const r = fmt.grid.r, ro = r + 0.6;
-    const ring = (cx, cy, rad) => {
-      let s = 0;
-      for (const [c, si] of RING) {
-        const v = at(g, w, h, H, cx + c * rad, cy + si * rad);
-        if (v !== v) return NaN;
-        s += v;
-      }
-      return s / RING.length;
-    };
+    const ring = (cx, cy, rad) => ringMean(g, w, h, H, cx, cy, rad);
     const score = (q, dx, dy) => {
       let s = 0;
       for (const [x, y] of q.opts) {
@@ -288,6 +298,78 @@ const OMR = (() => {
     }
     return out;
   }
+
+  // İkinci tur ızgara ayarı (kıvrık kâğıt). Her soru için [dx, dy, ölçek]; ölçek satırın ortasına göredir
+  // (kıvrık kâğıtta formun bir bölgesi köşelerden hesaplanandan dar görünür).
+  // Satır puanına çerçevelerin yanında en koyu yuvarlağın doluluğu da girer: dolu yuvarlak geniş ve
+  // yumuşak bir tepe verir, ince çerçeve son ayarı yapar.
+  // 1. Sütunun tamamı için tek kaydırma ve ölçek geniş aranır; farklı şıklardaki dolu yuvarlaklar
+  //    birlikte ölçeği sabitler (bir satırda çoğu zaman tek dolu yuvarlak vardır, boş çerçeveler soluk olabilir).
+  // 2. Sonra satırdan satıra, her satır bir öncekinin ayarı çevresinde aranır; en sonda medyan süzgeç.
+  function wideRowScorer(g, w, h, H, fmt) {
+    const r = fmt.grid.r, ro = r + 0.6, ri = r * 0.4;
+    const ring = (cx, cy, rad) => ringMean(g, w, h, H, cx, cy, rad);
+    return (q, [dx, dy, k]) => {
+      const mid = rowMid(q);
+      let s = 0, fill = 0;
+      for (const [ox, oy] of q.opts) {
+        const x = mid + (ox - mid) * k + dx, y = oy + dy;
+        const band = (ring(x, y, r - 0.1) + ring(x, y, r + 0.1)) / 2;
+        const out = ring(x, y, ro);
+        const inner = (at(g, w, h, H, x, y) + at(g, w, h, H, x - ri, y) + at(g, w, h, H, x + ri, y) + at(g, w, h, H, x, y - ri) + at(g, w, h, H, x, y + ri)) / 5;
+        if (band !== band || out !== out || inner !== inner) return -1e9;
+        s += out - band;
+        if (out - inner > fill) fill = out - inner;
+      }
+      return s + fill;
+    };
+  }
+  const rowMid = (q) => (q.opts[0][0] + q.opts[q.opts.length - 1][0]) / 2;
+  const gridFit = (score, grid, offsets) => grid.questions.reduce((s, q, i) => s + score(q, offsets[i]), 0);
+  function refineGridWide(score, grid) {
+    const fits = ([dx, dy, k]) => Math.abs(dx) <= WIDE_MAX_X && Math.abs(dy) <= WIDE_MAX_Y && Math.abs(k - 1) <= SCALE_MAX;
+    const out = new Array(grid.questions.length);
+    const cols = new Map();
+    grid.questions.forEach((q, i) => { if (!cols.has(q.col)) cols.set(q.col, []); cols.get(q.col).push(i); });
+    for (const idx of cols.values()) {
+      // Geniş arama sütundan en çok 8 satırla
+      const some = idx.filter((_, k) => k % Math.ceil(idx.length / 8) === 0);
+      const total = (p) => some.reduce((s, qi) => s + score(grid.questions[qi], p), 0);
+      let P = [0, 0, 1], best = total(P);
+      for (let k = 1 - SCALE_MAX; k <= 1 + SCALE_MAX + 1e-9; k += SCALE_STEP * 0.75)
+        for (let dx = -WIDE_MAX_X; dx <= WIDE_MAX_X + 1e-9; dx += 0.5)
+          for (let dy = -WIDE_MAX_Y; dy <= WIDE_MAX_Y + 1e-9; dy += 0.5) {
+            const s = total([dx, dy, k]);
+            if (s > best) { best = s; P = [dx, dy, k]; }
+          }
+      let prev = P;
+      const raw = idx.map((qi) => {
+        const q = grid.questions[qi];
+        let b = prev, bs = score(q, prev);
+        for (const step of [0.4, 0.2, 0.1]) {
+          const [cx, cy, ck] = b;
+          for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) for (let m = -1; m <= 1; m++) {
+            if (!i && !j && !m) continue;
+            const p = [cx + i * step, cy + j * step, ck + m * step * SCALE_STEP * 0.5];
+            if (!fits(p)) continue;
+            const s = score(q, p);
+            if (s > bs) { bs = s; b = p; }
+          }
+        }
+        // Çerçeve görünmüyorsa (çok soluk baskı) bu satırda yeni ayar bulunmaz
+        if (bs <= 6 * q.opts.length) return prev;
+        prev = b;
+        return b;
+      });
+      const med = (a) => { const s = a.slice().sort((x, y) => x - y); return s[s.length >> 1]; };
+      idx.forEach((qi, k) => {
+        const win = raw.slice(Math.max(0, k - 2), k + 3);
+        out[qi] = [0, 1, 2].map((c) => med(win.map((v) => v[c])));
+      });
+    }
+    return out;
+  }
+
 
   // Bir soru satırındaki işaret: indeks, null (boş) ya da -1 (birden fazla)
   function pick(s, T) {
@@ -356,6 +438,67 @@ const OMR = (() => {
     const thr = (lo + hi) / 2;
     return Layout.decodeId(vals.map((v) => (v > thr ? 1 : 0)));
   }
+
+  // İkinci tur kod okuma: şerit kendi ekseninde kaydırılıp ölçeklenerek, hücrelerin en net "koyu/açık"
+  // ayrıldığı yerleşim aranır (iki uç hücre her zaman koyudur). Ölçüt, hücrelerin gri değerlerini ikiye
+  // ayıran en geniş boşluktur. Kayıtlı olmayan kod kabul edilmez.
+  function searchId(g, w, h, H, fmt, known) {
+    const { x0, y, pitch, cell } = fmt.id;
+    const n = Layout.ID_CELLS, mid = (n - 1) / 2;
+    const d = cell * 0.25;
+    const FIVE = [[0, 0], [-d, -d], [d, -d], [-d, d], [d, d]], ONE = [[0, 0]];
+    const vals = new Array(n);
+    const evalAt = ([dx, dy, s, slope], pts) => {
+      for (let i = 0; i < n; i++) {
+        const u = (i - mid) * pitch * s;
+        const cx = x0 + mid * pitch + u + dx, cy = y + dy + u * slope;
+        let sum = 0;
+        for (const [px, py] of pts) {
+          const v = at(g, w, h, H, cx + px, cy + py);
+          if (v !== v) return null;
+          sum += v;
+        }
+        vals[i] = sum / pts.length;
+      }
+      const sorted = vals.slice().sort((a, b) => a - b);
+      let gap = 0, thr = 0;
+      for (let k = 1; k < n - 1; k++) {
+        if (sorted[k + 1] - sorted[k] > gap) { gap = sorted[k + 1] - sorted[k]; thr = (sorted[k] + sorted[k + 1]) / 2; }
+      }
+      if (vals[0] >= thr || vals[n - 1] >= thr) return null;
+      return { gap, bits: vals.map((v) => (v < thr ? 1 : 0)) };
+    };
+    // Kaba arama hücre başına tek noktayla; en iyi birkaç aday beş noktayla ince ayarlanır
+    let cands = [];
+    for (let s = 0.86; s <= 1.141; s += 0.03)
+      for (let dx = -5; dx <= 5.01; dx += 0.8)
+        for (let dy = -4; dy <= 4.01; dy += 0.6) {
+          const r = evalAt([dx, dy, s, 0], ONE);
+          if (r) cands.push({ p: [dx, dy, s, 0], gap: r.gap });
+        }
+    cands = cands.sort((a, b) => b.gap - a.gap).slice(0, 5);
+    const UNIT = [1, 1, 0.04, 0.08];
+    let hit = null;
+    for (const c of cands) {
+      let p = c.p, r0 = evalAt(p, FIVE), bg = r0 ? r0.gap : 0;
+      for (const step of [0.3, 0.1]) {
+        for (let iter = 0, moved = true; moved && iter < 12; iter++) {
+          moved = false;
+          for (let k = 0; k < 4; k++) for (const sg of [-1, 1]) {
+            const q = p.slice();
+            q[k] += sg * step * UNIT[k];
+            const r = evalAt(q, FIVE);
+            if (r && r.gap > bg) { bg = r.gap; p = q; moved = true; }
+          }
+        }
+      }
+      const r = evalAt(p, FIVE);
+      const id = r && r.gap > 25 ? Layout.decodeId(r.bits) : null;
+      if (id != null && (!hit || r.gap > hit.gap)) hit = { id, gap: r.gap };
+    }
+    return hit && known(hit.id) ? hit.id : null;
+  }
+
 
   function polyArea(p) {
     let a = 0;
@@ -458,48 +601,76 @@ const OMR = (() => {
     };
     const forms = [], used = new Set(), ids = new Set();
     let fail = null;
+    // Bir formu verilen konumla okur. wide: ikinci tur (kıvrık kâğıt)
+    const readForm = (quad, dst, H, id, wide) => {
+      lap('kod');
+      const grid = Layout.grid(fmt, spec.questionCount, spec.optionCount);
+      // spec.refine === false yalnızca testlerde karşılaştırma için kullanılır
+      let offsets = spec.refine === false ? grid.questions.map(() => [0, 0, 1]) : refineGrid(gray, w, h, H, fmt, grid).map(([dx, dy]) => [dx, dy, 1]);
+      if (wide && spec.refine !== false) {
+        const score = wideRowScorer(gray, w, h, H, fmt);
+        const alt = refineGridWide(score, grid);
+        if (gridFit(score, grid, alt) > gridFit(score, grid, offsets)) offsets = alt;
+      }
+      lap('ızgara');
+      const G = fmt.grid;
+      const scores = [];
+      const centers = grid.questions.map((q, i) => {
+        const [dx, dy, k] = offsets[i], mid = rowMid(q);
+        return q.opts.map(([x, y]) => [mid + (x - mid) * k + dx, y + dy]);
+      });
+      for (const row of centers) {
+        const s = row.map(([x, y]) => spotDarkness(gray, w, h, H, x, y, G.r, G.rowPitch / 2));
+        if (s.some((v) => v < 0)) { fail = fail || { ok: false, reason: 'partial', id, corners: dst }; return; }
+        scores.push(s);
+      }
+      // Kitapçık işareti (sınavda birden fazla kitapçık varsa)
+      let bookletScores = null;
+      const nb = Layout.bookletCount(spec);
+      if (nb > 1) {
+        const b = Layout.bookletSpots(fmt, nb);
+        bookletScores = b.opts.map(([x, y]) => spotDarkness(gray, w, h, H, x, y, b.r, 3.2));
+        if (bookletScores.some((v) => v < 0)) bookletScores = bookletScores.map(() => 0);
+      }
+      lap('yuvarlak');
+      quad.blobs.forEach((b) => used.add(b));
+      if (!ids.has(id)) {
+        ids.add(id);
+        forms.push({ id, H, corners: dst, grid, centers, scores, bookletScores, ...decide(scores, bookletScores) });
+      }
+    };
+    // Form ters ya da yan tutulmuş olabilir: dört dönüş de denenir
+    const rotations = (quad) => {
+      const pts = quad.blobs.map(fine);
+      return [0, 1, 2, 3].map((rot) => {
+        const dst = [0, 1, 2, 3].map((i) => pts[(i + rot) % 4]);
+        return { dst, H: homography(fmt.mark.pts, dst) };
+      }).filter((x) => x.H);
+    };
     for (const quad of quads) {
       if (forms.length >= 6) break;
       if (quad.blobs.some((b) => used.has(b))) continue;
-      const pts = quad.blobs.map(fine);
-      // Form ters ya da yan tutulmuş olabilir: dört dönüşü de dene
-      for (let rot = 0; rot < 4; rot++) {
-        const dst = [0, 1, 2, 3].map((i) => pts[(i + rot) % 4]);
-        const H = homography(fmt.mark.pts, dst);
-        if (!H) continue;
+      for (const { dst, H } of rotations(quad)) {
         const id = readId(gray, w, h, H, fmt);
         if (id == null) continue;
         if (!known(id)) { fail = fail || { ok: false, reason: 'unknown', id, corners: dst }; break; }
-        lap('kod');
-        const grid = Layout.grid(fmt, spec.questionCount, spec.optionCount);
-        // spec.refine === false yalnızca testlerde karşılaştırma için kullanılır
-        const offsets = spec.refine === false ? grid.questions.map(() => [0, 0]) : refineGrid(gray, w, h, H, fmt, grid);
-        lap('ızgara');
-        const G = fmt.grid;
-        let scores = [], outside = false;
-        const centers = grid.questions.map((q, i) => q.opts.map(([x, y]) => [x + offsets[i][0], y + offsets[i][1]]));
-        for (const row of centers) {
-          const s = row.map(([x, y]) => spotDarkness(gray, w, h, H, x, y, G.r, G.rowPitch / 2));
-          if (s.some((v) => v < 0)) { outside = true; break; }
-          scores.push(s);
-        }
-        if (outside) { fail = fail || { ok: false, reason: 'partial', id, corners: dst }; break; }
-        // Kitapçık işareti (sınavda birden fazla kitapçık varsa)
-        let bookletScores = null;
-        const nb = Layout.bookletCount(spec);
-        if (nb > 1) {
-          const b = Layout.bookletSpots(fmt, nb);
-          bookletScores = b.opts.map(([x, y]) => spotDarkness(gray, w, h, H, x, y, b.r, 3.2));
-          if (bookletScores.some((v) => v < 0)) bookletScores = bookletScores.map(() => 0);
-        }
-        lap('yuvarlak');
-        quad.blobs.forEach((b) => used.add(b));
-        if (!ids.has(id)) {
-          ids.add(id);
-          forms.push({ id, H, corners: dst, grid, centers, scores, bookletScores, ...decide(scores, bookletScores) });
-        }
+        readForm(quad, dst, H, id, false);
         break;
       }
+    }
+    // İkinci tur: hiçbir form okunamadıysa en iyi birkaç dörtgende kod şeridi aranır (kıvrık kâğıt)
+    if (!forms.length) {
+      for (const quad of quads.slice(0, 3)) {
+        if (forms.length) break;
+        for (const { dst, H } of rotations(quad)) {
+          const id = searchId(gray, w, h, H, fmt, known);
+          if (id == null) continue;
+          if (fail?.reason === 'unknown') fail = null;
+          readForm(quad, dst, H, id, true);
+          break;
+        }
+      }
+      lap('kod');
     }
     if (forms.length) {
       // Okuma sırası: yukarıdan aşağı, soldan sağa

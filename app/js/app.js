@@ -419,9 +419,10 @@
       ${toCheck.length ? `<div class="card pad small" style="margin-top:12px;border:1.5px solid var(--warn)">⚠ <b>${toCheck.length} öğrencide</b> okuyucunun emin olamadığı işaret var. Satırlardaki ⚠ işaretine dokunup kontrol edin.</div>` : ''}
       <h2>Sonuçlar</h2>
       <div class="card">${st.rows.length ? `<table class="tbl"><thead><tr><th>#</th><th class="l">Öğrenci</th><th>D</th><th>Y</th><th>B</th><th>Net</th><th>${Store.usesPoints(e) ? 'Puan' : '%'}</th></tr></thead><tbody>
-        ${st.rows.map((x, i) => `<tr data-go="#/result/${id}/${x.st.id}"><td class="muted">${i + 1}</td><td class="l">${x.r.uncertain?.length ? '<span title="Kontrol edilecek soru var" style="color:var(--warn)">⚠</span> ' : ''}${esc(x.st.name)}</td><td style="color:var(--ok)">${x.s.correct}</td><td style="color:var(--bad)">${x.s.wrong}</td><td class="muted">${x.s.blank}</td><td>${Store.usesPoints(e) ? fmt(x.s.net) : `<b>${fmt(x.s.net)}</b>`}</td><td class="${Store.usesPoints(e) ? '' : 'muted'}">${Store.usesPoints(e) ? `<b>${fmt(x.s.points, 1)}</b>` : fmt(x.s.pct, 1)}</td></tr>`).join('')}
+        ${st.rows.map((x, i) => `<tr data-go="#/result/${id}/${x.st.id}"><td class="muted">${i + 1}</td><td class="l">${x.r.uncertain?.length ? '<span title="Kontrol edilecek soru var" style="color:var(--warn)">⚠</span> ' : ''}${x.r.manual ? '<span title="Elle girildi">✍️</span> ' : ''}${esc(x.st.name)}</td><td style="color:var(--ok)">${x.s.correct}</td><td style="color:var(--bad)">${x.s.wrong}</td><td class="muted">${x.s.blank}</td><td>${Store.usesPoints(e) ? fmt(x.s.net) : `<b>${fmt(x.s.net)}</b>`}</td><td class="${Store.usesPoints(e) ? '' : 'muted'}">${Store.usesPoints(e) ? `<b>${fmt(x.s.points, 1)}</b>` : fmt(x.s.pct, 1)}</td></tr>`).join('')}
         </tbody></table>` : '<div class="empty">Henüz okutulan optik yok</div>'}</div>
-      ${missing.length ? `<h2>Okutulmayanlar (${missing.length})</h2><div class="card pad small">${missing.map((s) => esc(s.name)).join(', ')}</div>` : ''}
+      ${missing.length ? `<h2>Okutulmayanlar (${missing.length})</h2><div class="card pad small"><p class="muted" style="margin:0 0 8px">Formu okunamayan öğrencinin cevaplarını elle girmek için adına dokunun.</p>
+        <div class="chips">${missing.map((s) => `<a class="chip" href="#/result/${id}/${s.id}">✍️ ${esc(s.name)}</a>`).join('')}</div></div>` : ''}
       <button class="btn danger block" style="margin-top:28px" data-act="del-exam" data-id="${id}">Sınavı sil</button>`;
   }
 
@@ -514,6 +515,23 @@
     render(true);
   }
 
+  // Öğrencinin cevaplarını harf dizisiyle girer: A–E, '-' ya da '.' boş, '*' çift işaret; boşluklar yok sayılır
+  function applyAnswerText(examId, studentId) {
+    const e = Store.getExam(examId), r = Store.getResult(examId, studentId);
+    const letters = $('#ans-text').value.toLocaleUpperCase('tr-TR').replace(/[^A-E_\-*.]/g, '');
+    if (!letters) return toast('Harfleri yazın, örn. ADABB-DC');
+    const answers = r ? r.answers.slice(0, e.questionCount) : [];
+    while (answers.length < e.questionCount) answers.push(null);
+    const n = Math.min(letters.length, e.questionCount);
+    [...letters].slice(0, n).forEach((ch, i) => {
+      const j = L.indexOf(ch);
+      answers[i] = ch === '*' ? -1 : j >= 0 && j < e.optionCount ? j : null;
+    });
+    Store.saveResult(examId, studentId, answers, r ? r.booklet ?? null : null, (r?.uncertain || []).filter((i) => i >= n), !r || !!r.manual);
+    toast(`${n} soru girildi${letters.length > e.questionCount ? ` (fazla ${letters.length - e.questionCount} harf yok sayıldı)` : ''}`);
+    render(true);
+  }
+
   function applyKeyText(id, bk) {
     const e = Store.getExam(id);
     const key = Store.keyFor(e, bk).slice();
@@ -548,7 +566,7 @@
       : `<p class="small" style="color:var(--bad);margin:8px 0 0">Öğrenci kitapçığı ${r.booklet === -1 ? 'iki kez işaretlemiş' : 'işaretlememiş'}; A kitapçığı sayıldı. Doğrusunu seçin:</p>`;
     return `
       <div class="result-identity"><span class="student-avatar" aria-hidden="true">${esc(s.name.split(/\s+/).map((x) => x[0]).slice(0, 2).join(''))}</span><div><span class="eyebrow">Öğrenci sonuç raporu</span><h2>${esc(s.name)}</h2><p>${esc(e.name)} · ${fmtDate(e.date)}</p></div></div>
-      <div class="analysis-hero result-score"><div><span class="eyebrow">${Store.mainLabel(e)} sonucu</span><div class="hero-value">${fmt(Store.mainScore(e, sc), 1)}<small>/ ${Store.usesPoints(e) ? 100 : sc.counted}</small></div><p class="hero-caption">${r ? 'Optik form değerlendirildi' : 'Henüz okutulmadı'}</p></div><div class="hero-aside"><b>%${fmt(sc.pct, 1)}</b><span>Net başarı oranı</span><div class="hero-meter"><i style="width:${Math.max(0, Math.min(100, sc.pct))}%"></i></div></div></div>
+      <div class="analysis-hero result-score"><div><span class="eyebrow">${Store.mainLabel(e)} sonucu</span><div class="hero-value">${fmt(Store.mainScore(e, sc), 1)}<small>/ ${Store.usesPoints(e) ? 100 : sc.counted}</small></div><p class="hero-caption">${!r ? 'Henüz okutulmadı · cevapları aşağıdan elle girebilirsiniz' : r.manual ? 'Elle girildi' : 'Optik form değerlendirildi'}</p></div><div class="hero-aside"><b>%${fmt(sc.pct, 1)}</b><span>Net başarı oranı</span><div class="hero-meter"><i style="width:${Math.max(0, Math.min(100, sc.pct))}%"></i></div></div></div>
       <div class="stats">
         <div class="stat"><b style="color:var(--ok)">${sc.correct}</b><span>Doğru</span></div>
         <div class="stat"><b style="color:var(--bad)">${sc.wrong}</b><span>Yanlış</span></div>
@@ -558,10 +576,12 @@
       ${unsure.size ? `<div class="card pad small" style="margin-top:12px;border:1.5px solid var(--warn)">⚠ Okuyucu <b>${[...unsure].map((i) => i + 1).join(', ')}</b> numaralı ${unsure.size > 1 ? 'sorulardaki' : 'sorudaki'} işaretten emin olamadı (sarı çerçeveli). Kâğıda bakıp gerekiyorsa düzeltin.
         <button class="btn small block" style="margin-top:8px" data-act="checked" data-e="${examId}" data-s="${studentId}">✓ Kontrol ettim, doğru</button></div>` : ''}
       ${topics && topics.length ? `<h2>Konular</h2><div class="card list">${topics.map((t) => topicRow(t.name, t.total ? t.correct / t.total : null, `${t.correct}/${t.total}`)).join('')}</div>` : ''}
-      ${nb > 1 && r ? `<h2>Kitapçık</h2><div class="card pad">${bkNote ? bkNote.replace('margin:8px 0 0', 'margin:0 0 8px') : ''}<div class="seg">${Array.from({ length: nb }, (_, b) =>
-        `<button class="${b === bk && r.booklet >= 0 && r.booklet != null ? 'on' : ''}" data-act="set-booklet" data-e="${examId}" data-s="${studentId}" data-b="${b}">${L[b]}</button>`).join('')}</div></div>` : ''}
+      ${nb > 1 ? `<h2>Kitapçık</h2><div class="card pad">${bkNote ? bkNote.replace('margin:8px 0 0', 'margin:0 0 8px') : ''}<div class="seg">${Array.from({ length: nb }, (_, b) =>
+        `<button class="${r && b === bk && r.booklet >= 0 && r.booklet != null ? 'on' : ''}" data-act="set-booklet" data-e="${examId}" data-s="${studentId}" data-b="${b}">${L[b]}</button>`).join('')}</div></div>` : ''}
       <h2>Cevaplar</h2>
-      <div class="card pad"><div class="small muted" style="margin-bottom:6px">Okuma hatası varsa harfe dokunarak düzeltin. Yeşil çerçeve doğru cevabı gösterir.</div>
+      <div class="card pad"><div class="small muted" style="margin-bottom:6px">${r && !r.manual ? 'Okuma hatası varsa harfe dokunarak düzeltin.' : 'Öğrencinin işaretlediği harflere dokunun ya da harfleri sırayla yazın (<b>-</b> boş, <b>*</b> çift işaret).'} Tekrar dokunmak siler. Yeşil çerçeve doğru cevabı gösterir.</div>
+      <div class="row" style="margin-bottom:8px"><input type="text" id="ans-text" class="grow" placeholder="Hızlı giriş: ADAB-C…" autocapitalize="characters" autocomplete="off" style="flex:1;min-width:0;text-transform:uppercase">
+        <button class="btn" data-act="ans-text" data-e="${examId}" data-s="${studentId}">Uygula</button></div>
       <div class="qgrid">${answers.slice(0, e.questionCount).map((a, i) => {
         const key = keyArr[i] ?? null, p = sc.per[i];
         const mark = p === 'd' ? '<span style="color:var(--ok)">✓</span>' : p === 'y' ? '<span style="color:var(--bad)">✗</span>' : p === 'x' ? '<span class="muted small">iptal</span>' : '';
@@ -1187,10 +1207,13 @@
         break;
       }
       case 'set-booklet': {
-        Store.setBooklet(+d.e, +d.s, +d.b);
+        const e = Store.getExam(+d.e);
+        if (Store.getResult(e.id, +d.s)) Store.setBooklet(e.id, +d.s, +d.b);
+        else Store.saveResult(e.id, +d.s, Array(e.questionCount).fill(null), +d.b, [], true);
         render(true);
         break;
       }
+      case 'ans-text': applyAnswerText(+d.e, +d.s); break;
       case 'key-text': applyKeyText(id, +d.b || 0); break;
       case 'ans-set': {
         const e = Store.getExam(+d.e), sid = +d.s, q = +d.q, o = +d.o;
@@ -1198,7 +1221,7 @@
         const answers = r ? r.answers.slice() : Array(e.questionCount).fill(null);
         answers[q] = answers[q] === o ? null : o;
         // Elle düzeltilen soru artık şüpheli sayılmaz
-        Store.saveResult(e.id, sid, answers, r ? r.booklet ?? null : null, (r?.uncertain || []).filter((i) => i !== q));
+        Store.saveResult(e.id, sid, answers, r ? r.booklet ?? null : null, (r?.uncertain || []).filter((i) => i !== q), !r || !!r.manual);
         const y = window.scrollY;
         render();
         window.scrollTo(0, y);

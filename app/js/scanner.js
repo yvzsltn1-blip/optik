@@ -13,7 +13,7 @@ const Scanner = (() => {
   const el = {
     root: $('scanner'), video: $('scan-video'), overlay: $('scan-overlay'), exam: $('scan-exam'),
     count: $('scan-count'), status: $('scan-status'), card: $('scan-card'), auto: $('scan-auto'),
-    file: $('scan-file'), torch: $('scan-torch'),
+    file: $('scan-file'), torch: $('scan-torch'), manual: $('scan-manual'),
   };
   const work = document.createElement('canvas');
   const wctx = work.getContext('2d', { willReadFrequently: true });
@@ -58,6 +58,7 @@ const Scanner = (() => {
     el.card.hidden = true;
     el.status.hidden = false;
     el.auto.parentElement.hidden = mode === 'key';
+    el.manual.hidden = mode === 'key';
     updateCount();
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -175,7 +176,7 @@ const Scanner = (() => {
         setStatus(fromPhoto ? 'Fotoğrafta form bulunamadı' : 'Formu çerçeveye yerleştirin, 4 siyah köşe görünsün', fromPhoto ? 'bad' : '');
       } else if (res.reason === 'unknown') setStatus(`Bu form kayıtlı değil (#${res.id}). Öğrenci silinmiş olabilir.`, 'bad');
       else if (res.reason === 'partial') setStatus('Formun tamamı görünmüyor, biraz uzaklaşın', 'bad');
-      else setStatus('Form okunamadı. Bu sınavın formu olduğundan emin olun, düz ve net tutun.', '');
+      else setStatus('Form okunamadı. Kâğıdı düzleştirip net tutun; olmuyorsa "✍️ Elle gir"', 'bad');
       return;
     }
     state.quietSince = 0;
@@ -269,7 +270,21 @@ const Scanner = (() => {
     state.frozen = true;
     el.video.pause();
     showCard(`<div class="name">${esc(student.name)}</div><div class="small muted">${esc(student.number ? 'No ' + student.number : '')}${needsLook && el.auto.checked && !fromPhoto ? ' · otomatik kayıt kontrol için durdu' : ''}</div>${nums}<div class="row small">${notes}</div>
-      <div class="btns"><button class="btn" data-scan="retry">${fromPhoto ? 'Kapat' : 'Tekrar oku'}</button><button class="btn primary" data-scan="save">Kaydet</button></div>`);
+      <div class="btns"><button class="btn" data-scan="retry">${fromPhoto ? 'Kapat' : 'Tekrar oku'}</button><button class="btn primary" data-scan="save">Kaydet</button></div>
+      <button class="btn block" style="margin-top:8px" data-scan="save-edit">Kaydet ve düzelt ›</button>`);
+  }
+
+  // Okunamayan form için: okutulmamış öğrenci seçilir, cevaplar sonuç sayfasında elle girilir
+  function manualPick() {
+    const done = new Set(Store.results(state.exam.id).map((r) => r.studentId));
+    const list = Store.students(state.exam.classId).filter((s) => !done.has(s.id));
+    state.frozen = true;
+    el.video.pause();
+    clearOverlay();
+    showCard(`<div class="name">Elle giriş</div><p class="small muted">Formu okunamayan öğrenciyi seçin; cevaplarını sonuç sayfasında harflere dokunarak ya da yazarak girersiniz.</p>
+      ${list.length ? `<div class="chips" style="max-height:40vh;overflow:auto">${list.map((s) => `<a class="chip" href="#/result/${state.exam.id}/${s.id}" data-scan="edit">${esc(s.name)}</a>`).join('')}</div>`
+        : '<p class="small">Bu sınıfta okutulmamış öğrenci kalmadı. Okutulmuş bir sonucu düzeltmek için sınav sayfasındaki listeden öğrenciye dokunun.</p>'}
+      <button class="btn block" style="margin-top:10px" data-scan="retry">Vazgeç</button>`);
   }
 
   function showCard(html) {
@@ -417,7 +432,14 @@ const Scanner = (() => {
     if (act === 'close') close();
     else if (act === 'torch') toggleTorch();
     else if (act === 'retry') resume();
-    else if (act === 'save') {
+    else if (act === 'manual') manualPick();
+    else if (act === 'save-edit') {
+      const { student, answers, booklet, uncertain } = state.pending;
+      const examId = state.exam.id;
+      Store.saveResult(examId, student.id, answers, booklet, uncertain);
+      close();
+      location.hash = `#/result/${examId}/${student.id}`;
+    } else if (act === 'save') {
       const { student, answers, booklet, uncertain } = state.pending;
       Store.saveResult(state.exam.id, student.id, answers, booklet, uncertain);
       state.saved.add(student.id);

@@ -36,7 +36,7 @@ py -m http.server 8766        # proje kök klasöründe
 - `http://127.0.0.1:8766/tests/seed.html` – örnek veri yükler (**mevcut verileri siler**)
 - `http://127.0.0.1:8766/tests/scan-e2e.html#a4` / `#a6` – fotoğraftan okutma akışı (önce `seed.html`)
 - `http://127.0.0.1:8766/tests/scan-booklet-e2e.html` – kitapçıklı okutma ve anahtar okutma (önce `seed.html`)
-- `tests/real-test.html` – gerçek telefon fotoğraflarıyla okuma (`tests/fixtures/`)
+- `tests/real-test.html` – gerçek telefon fotoğraflarıyla okuma (`tests/fixtures/`; `gercek-a6-kivrik.jpeg` ortası kıvrık kâğıt, öğrenci adı kapatıldı)
 - `tests/omr-test.html?norefine` – ızgara ince ayarı kapalı karşılaştırma
 - `tests/live-frame.html` – sahte kamera videosu (y4m) için kare üretir; Chrome `--use-file-for-fake-video-capture` ile canlı akış testi yapılır
 - `http://127.0.0.1:8766/tests/sheet.html?a6` – sayfa önizlemesi (`?a4`, `?a5`, `?a6`)
@@ -53,6 +53,8 @@ py -m http.server 8766        # proje kök klasöründe
 - Veli karnesi: `app/js/report.js` tuvalde JPG karne çizer; telefonda paylaşım menüsüyle ya da panoya kopyalanıp WhatsApp sohbetiyle gönderilir.
 - Form geometrisi `app/js/layout.js` dosyasında. Burada yapılacak bir değişiklik, basılmış tüm formları geçersiz kılar.
 - Her öğrencinin formunda, öğrenciyi tanıtan bir kod şeridi (16 bit + kontrol biti) bulunur. Okutma sırasında öğrenci bu şeritten otomatik olarak tanınır.
+- Kıvrık kâğıt: köşelerden hesaplanan konum kâğıdın ortasında birkaç mm kayabilir. Normal okumada hiçbir form bulunamazsa ikinci tur çalışır: kod şeridi kaydırılıp ölçeklenerek aranır (yalnız kayıtlı öğrenci kodu kabul edilir), ızgara sütun sütun geniş kaydırma ve yatay ölçekle oturtulur. Normal formlarda bu tur hiç çalışmaz, hız değişmez.
+- Elle giriş: okunamayan formun cevapları sonuç sayfasında harflere dokunarak ya da `ADAB-C*` gibi yazılarak girilir (`-` boş, `*` çift işaret). Sınav sayfasındaki "Okutulmayanlar" listesinden ya da kamera ekranındaki "✍️ Elle gir" düğmesinden açılır. Elle girilen sonuç `manual: true` ile işaretlenir, listede ✍️ görünür. Okutulmuş bir sonuç aynı sayfada düzeltilir; kamera kartındaki "Kaydet ve düzelt" doğrudan bu sayfaya götürür.
 
 ## Açık sayfalarda yayın bildirimi
 
@@ -61,7 +63,7 @@ py -m http.server 8766        # proje kök klasöründe
 Her öğretmen uygulaması yayınında:
 1. `app/release.json` içindeki `version` ve `app/js/update.js` içindeki `VERSION` değerlerini aynı yeni sürüme yükseltin.
 2. `app/sw.js` içindeki `CACHE` sürümünü yükseltin.
-3. `node tmp/check-update.cjs` ve JavaScript sözdizimi kontrollerini çalıştırın.
+3. `node tmp/check-update.cjs`, `node tmp/check-manual-entry.cjs` ve JavaScript sözdizimi kontrollerini çalıştırın.
 4. `firebase.cmd deploy --only hosting:ogretmen --project optik-form-903ed --non-interactive` ile dosyaları birlikte yayınlayın.
 
 Bildirim desteği 2026-10-22.1 sürümünde eklendi. Daha eski sürümle açık kalan sayfalarda bu mekanizma olmadığından bir kez elle yenileme gerekir.
