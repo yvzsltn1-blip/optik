@@ -45,8 +45,20 @@ const Store = (() => {
   const byId = (list, id) => list.find((x) => x.id === id);
 
   // --- Sınıflar ---
-  const classes = () => db.classes;
+  // Öğretmenin sürükleyerek verdiği sıra (order); sırası olmayanlar eklenme sırasıyla sonda.
+  const classes = () => db.classes.slice().sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9));
+  // Renk için eklenme sırası: sınıfların yeri değişince renkleri değişmesin
+  const classIndex = (id) => db.classes.findIndex((c) => c.id === id);
   const getClass = (id) => byId(db.classes, id);
+  function reorderClasses(ids) {
+    ids.forEach((id, i) => {
+      const c = getClass(id);
+      if (!c || c.order === i) return;
+      c.order = i;
+      emit('put', 'classes', c);
+    });
+    save();
+  }
   function saveClass(c) {
     if (c.id) c = Object.assign(getClass(c.id), c);
     else { c.id = newId(); db.classes.push(c); }
@@ -342,7 +354,7 @@ const Store = (() => {
   }
 
   return {
-    KINDS, classes, getClass, saveClass, deleteClass,
+    KINDS, classes, classIndex, getClass, saveClass, deleteClass, reorderClasses,
     students, getStudent, addStudent, updateStudent, deleteStudent, newParentCode, parentExams,
     allStudents: () => db.students,
     exams, getExam, saveExam, deleteExam,

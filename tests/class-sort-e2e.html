@@ -1,0 +1,56 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>class-sort-e2e</title>
+<iframe id="f" style="width:420px;height:900px;border:0"></iframe>
+<pre id="out"></pre>
+<script>
+// Sınıflar sayfası: son karta (5-B) basılı tutup ilk kartın üzerine sürükle, bırak.
+localStorage.clear();
+const f = document.getElementById('f');
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const out = (s) => (document.getElementById('out').textContent += s + '\n');
+f.src = '../app/index.html';
+let started = false;
+f.onload = () => { if (!started) { started = true; run().catch((e) => out('HATA ' + e + ' ' + e.stack)); } };
+async function run() {
+  const w = f.contentWindow, S = w.eval('Store'), doc = w.document;
+  for (const n of ['5-A', '5-C', '6-A', '5-B']) S.saveClass({ name: n });
+  doc.querySelector('#auth').remove();
+  w.location.hash = '#/classes';
+  await wait(300);
+  const names = () => [...doc.querySelectorAll('.class-card h3')].map((h) => h.textContent).join(' ');
+  const colors = () => Object.fromEntries([...doc.querySelectorAll('.class-card')].map((c) => [c.querySelector('h3').textContent, c.getAttribute('style')]));
+  out('önce: ' + names());
+  const c0 = colors();
+  const ev = (type, el, x, y) => el.dispatchEvent(new w.PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', button: 0, isPrimary: true }));
+  const center = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  // Kısa dokunuş + hareket: sürükleme başlamamalı (kaydırma)
+  let card = [...doc.querySelectorAll('.class-card')].pop();
+  let [x, y] = center(card);
+  ev('pointerdown', card, x, y); ev('pointermove', card, x, y - 40); await wait(600);
+  out('kaydırmada sürükleme yok: ' + !doc.querySelector('.dragging'));
+  ev('pointerup', card, x, y - 40);
+  // Basılı tut ve ilk kartın üzerine sürükle
+  ev('pointerdown', card, x, y); await wait(550);
+  out('basılı tutunca kalktı: ' + card.classList.contains('dragging'));
+  const [tx, ty] = center(doc.querySelector('.class-card'));
+  for (let i = 1; i <= 10; i++) { ev('pointermove', doc, x + (tx - x) * i / 10, y + (ty - y) * i / 10); await wait(30); }
+  out('sürüklerken: ' + names());
+  ev('pointerup', doc, tx, ty);
+  await wait(50);
+  card.click(); // bırakınca gelen tıklama sınıfı açmamalı
+  await wait(300);
+  out('sayfa: ' + w.location.hash);
+  out('kayıtlı sıra: ' + S.classes().map((c) => c.name + ':' + c.order).join(' '));
+  w.dispatchEvent(new w.HashChangeEvent('hashchange'));
+  await wait(200);
+  out('yeniden çizince: ' + names());
+  const c1 = colors();
+  out('renkler aynı: ' + Object.keys(c0).every((k) => c0[k] === c1[k]));
+  S.saveClass({ name: '7-A' });
+  w.dispatchEvent(new w.HashChangeEvent('hashchange'));
+  await wait(200);
+  out('yeni sınıf sonda: ' + names());
+  document.title = 'DONE';
+}
+</script>

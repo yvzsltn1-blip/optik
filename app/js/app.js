@@ -161,11 +161,108 @@
       return `<div class="card empty"><p style="font-size:40px;margin:0">👥</p><p>Henüz sınıf yok.<br>Sınıf ekleyip öğrencileri girin; her öğrenciye özel optik form basılır.</p>
         <button class="btn primary" data-act="new-class">İlk sınıfı oluştur</button></div>`;
     }
-    return `${installBanner()}<div class="collection-intro"><span class="eyebrow">SINIFLARIM</span><h2>Her sınıfın kendi rengi.</h2><p>${list.length} sınıf · ${list.reduce((n, c) => n + Store.students(c.id).length, 0)} öğrenci</p></div><div class="class-grid">${list.map((c) => {
+    return `${installBanner()}<div class="collection-intro"><span class="eyebrow">SINIFLARIM</span><h2>Her sınıfın kendi rengi.</h2><p>${list.length} sınıf · ${list.reduce((n, c) => n + Store.students(c.id).length, 0)} öğrenci${list.length > 1 ? ' · Yerini değiştirmek için karta basılı tutup sürükleyin' : ''}</p></div><div class="class-grid" data-sortable>${list.map((c) => {
       const n = Store.students(c.id).length, ex = Store.exams(c.id).length;
-      return `<a class="class-card" style="${classColor(c.id)}" href="#/class/${c.id}"><span class="class-card-icon" aria-hidden="true">${ICON_STUDENTS}</span><span class="class-card-label">SINIF</span><h3>${esc(c.name)}</h3><div class="class-card-footer"><span>${n} öğrenci <span class="meta-dot">·</span> ${ex} sınav</span><span aria-hidden="true">↗</span></div></a>`;
+      return `<a class="class-card" style="${classColor(c.id)}" href="#/class/${c.id}" data-class-id="${c.id}" draggable="false"><span class="class-card-icon" aria-hidden="true">${ICON_STUDENTS}</span><span class="class-card-label">SINIF</span><h3>${esc(c.name)}</h3><div class="class-card-footer"><span>${n} öğrenci <span class="meta-dot">·</span> ${ex} sınav</span><span aria-hidden="true">↗</span></div></a>`;
     }).join('')}</div>`;
   }
+
+  // Sınıf kartlarını sıralama: karta basılı tutunca kart kalkar ve parmağı (fareyi) izler; üzerine
+  // geldiği kartın yerine geçer, ötekiler kayarak yer açar. Bırakınca sıra kaydedilir ve buluta gider.
+  (() => {
+    const HOLD = 450, SLOP = 8, EDGE = 90;
+    let press = null, drag = null;
+    const cards = (grid) => [...grid.querySelectorAll('.class-card')];
+    // Kartın kaydırma (transform) uygulanmamış yeri, ekran koordinatlarında
+    const home = (el) => {
+      const p = el.offsetParent, r = p.getBoundingClientRect();
+      return { l: r.left + p.clientLeft + el.offsetLeft, t: r.top + p.clientTop + el.offsetTop, w: el.offsetWidth, h: el.offsetHeight };
+    };
+    // Kartlar yer değiştirirken eski yerlerinden yenisine kayarak geçsin
+    function flip(els, change) {
+      const was = els.map((el) => el.getBoundingClientRect());
+      change();
+      els.forEach((el, i) => {
+        const now = el.getBoundingClientRect(), dx = was[i].left - now.left, dy = was[i].top - now.top;
+        if (!dx && !dy) return;
+        el.style.transition = 'none';
+        el.style.transform = `translate(${dx}px, ${dy}px)`;
+        el.getBoundingClientRect();
+        el.style.transition = 'transform .22s ease';
+        el.style.transform = '';
+      });
+    }
+
+    function start() {
+      const { card, x, y } = press;
+      press = null;
+      const h = home(card);
+      drag = { card, grid: card.parentElement, gx: x - h.l, gy: y - h.t, x, y, before: cards(card.parentElement).map((c) => c.dataset.classId).join() };
+      card.classList.add('dragging');
+      card.style.transition = 'none';
+      document.body.classList.add('sorting');
+      navigator.vibrate?.(25);
+      follow();
+      drag.raf = requestAnimationFrame(tick);
+    }
+    function follow() {
+      const { card, grid, x, y } = drag;
+      if (!card.isConnected) return end();
+      let h = home(card);
+      const over = cards(grid).find((c) => {
+        if (c === card) return false;
+        const o = home(c);
+        return x >= o.l && x <= o.l + o.w && y >= o.t && y <= o.t + o.h;
+      });
+      if (over) {
+        const list = cards(grid), forward = list.indexOf(over) > list.indexOf(card);
+        flip(list.filter((c) => c !== card), () => over[forward ? 'after' : 'before'](card));
+        h = home(card);
+      }
+      card.style.transform = `translate(${x - drag.gx - h.l}px, ${y - drag.gy - h.t}px) scale(1.04)`;
+    }
+    // Parmak ekranın üst ya da alt kenarına gelince sayfa kendiliğinden kayar
+    function tick() {
+      if (!drag) return;
+      const y = drag.y, v = y < EDGE ? -(EDGE - y) / 5 : y > innerHeight - EDGE ? (y - innerHeight + EDGE) / 5 : 0;
+      if (v) { scrollBy(0, v); follow(); }
+      if (drag) drag.raf = requestAnimationFrame(tick);
+    }
+    function end() {
+      const { card, grid, before, raf } = drag;
+      drag = null;
+      cancelAnimationFrame(raf);
+      document.body.classList.remove('sorting');
+      card.classList.remove('dragging');
+      card.style.transition = 'transform .2s ease';
+      card.style.transform = '';
+      setTimeout(() => (card.style.transition = ''), 250);
+      // Bırakınca gelen tıklama sınıfı açmasın; tıklama gelmezse sonraki gerçek tıklamaya dokunma
+      const eat = (e) => { e.preventDefault(); e.stopPropagation(); };
+      addEventListener('click', eat, { capture: true, once: true });
+      setTimeout(() => removeEventListener('click', eat, true), 400);
+      if (!card.isConnected) return;
+      const ids = cards(grid).map((c) => +c.dataset.classId);
+      if (ids.join() !== before) Store.reorderClasses(ids);
+    }
+
+    view.addEventListener('pointerdown', (ev) => {
+      const card = ev.target.closest('[data-sortable] .class-card');
+      if (!card || ev.button !== 0 || drag) return;
+      clearTimeout(press?.timer);
+      press = { card, x: ev.clientX, y: ev.clientY, timer: setTimeout(start, HOLD) };
+    });
+    addEventListener('pointermove', (ev) => {
+      if (drag) { drag.x = ev.clientX; drag.y = ev.clientY; follow(); }
+      else if (press && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) > SLOP) { clearTimeout(press.timer); press = null; }
+    });
+    const release = () => { if (press) { clearTimeout(press.timer); press = null; } if (drag) end(); };
+    addEventListener('pointerup', release);
+    addEventListener('pointercancel', release);
+    // Sürüklerken sayfa kaymasın, uzun basınca bağlantı menüsü açılmasın
+    addEventListener('touchmove', (e) => { if (drag) e.preventDefault(); }, { passive: false });
+    view.addEventListener('contextmenu', (e) => { if (press || drag) e.preventDefault(); });
+  })();
 
   function classForm(c) {
     const isNew = !c;
@@ -295,10 +392,10 @@
   }
 
   // ---------- Sınavlar ----------
-  // Ana sınıf listesini kullan: sınav sırası ve filtreler renkleri değiştirmez.
+  // Sınıfın eklenme sırasını kullan: sınav sırası, filtreler ve sınıfların yer değiştirmesi renkleri değiştirmez.
   function classColor(id) {
     const palette = [['#246b66', '#86d8c5'], ['#6654b0', '#bcaaff'], ['#286ba5', '#8ec9ff'], ['#a15d20', '#f0bc7c'], ['#ac4e70', '#f2a4c3'], ['#597529', '#c1d990']];
-    const index = Store.classes().findIndex(c => c.id === id);
+    const index = Store.classIndex(id);
     const [light, dark] = palette[Math.max(0, index) % palette.length];
     return `--class-light:${light};--class-dark:${dark}`;
   }
