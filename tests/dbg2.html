@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><title>dbg2</title><pre id="out"></pre>
+<script src="../app/js/layout.js"></script><script src="../app/js/omr.js"></script>
+<script>
+// Kesilmemiş 4'lü A6 sayfası: yarım çözünürlük açık/kapalı karşılaştırması
+(async () => {
+  const exam = { name: 'X', format: 'a6', questionCount: 20, optionCount: 4 };
+  const fmt = Layout.fmtOf('a6');
+  const ids = [41, 42, 43, 44];
+  const svg = Layout.pageSVG(fmt, ids.map((id) => ({ student: { id, name: 'Ö ' + id, number: '1' }, exam, cls: { name: '7-A' } })));
+  const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); await img.decode();
+  const c = document.createElement('canvas'); c.width = 1080; c.height = 1440;
+  const x = c.getContext('2d'); x.fillStyle = '#777'; x.fillRect(0, 0, 1080, 1440); x.drawImage(img, 60, 70, 960, 1300);
+  const d = x.getImageData(0, 0, 1080, 1440);
+  const out = [];
+  for (const half of [true, false]) {
+    const r = OMR.readAll(d, { ...exam, half }, (id) => ids.includes(id));
+    out.push(`half=${half}: ${r.ok ? r.forms.map((f) => f.id).join(',') : r.reason}`);
+  }
+  document.getElementById('out').textContent = out.join('\n');
+  document.title = 'BITTI';
+})();
+</script>

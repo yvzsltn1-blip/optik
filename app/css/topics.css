@@ -1,0 +1,41 @@
+.topic-editor-heading { display:flex; align-items:flex-start; gap:14px; justify-content:space-between; margin-bottom:20px; }
+.topic-editor-heading > div { min-width:0; flex:1; }
+.topic-editor h3 { font-size:17px; margin:0 0 7px; font-weight:600; }
+.topic-editor-heading p { font-size:12px; color:var(--muted); margin:0; line-height:1.7; }
+.topic-editor-heading a { flex-shrink:0; font-size:12px; }
+.topic-grade { max-width:240px; }
+.topic-assignments { display:grid; gap:12px; margin:18px 0 12px; }
+.topic-assignment { min-width:0; padding:16px; border:1px solid var(--line); background:color-mix(in srgb,var(--bg) 70%,var(--card)); border-radius:14px; }
+.topic-assignment-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.topic-assignment-head b { font-size:11px; font-weight:600; letter-spacing:.4px; color:var(--muted); }
+.topic-remove { display:grid; place-items:center; width:36px; height:36px; font-size:23px; background:var(--card); border:1px solid var(--line); border-radius:10px; color:var(--muted); cursor:pointer; }
+.topic-assignment select { background:var(--card); text-overflow:ellipsis; padding-right:28px; min-width:0; }
+.topic-question-controls { display:flex; align-items:flex-end; gap:10px; }
+.topic-question-controls > label { min-width:0; flex:1; margin:0; }
+.topic-question-controls .btn { flex-shrink:0; min-height:46px; }
+.topic-question-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(40px,1fr)); gap:7px; margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
+.topic-question-grid button { height:42px; border:1px solid var(--line); border-radius:9px; background:var(--card); color:var(--muted); cursor:pointer; font-size:13px; font-weight:600; }
+.topic-question-grid button[aria-pressed=true] { background:var(--accent); border-color:var(--accent); color:var(--card); }
+.topic-editor + .field { margin-top:24px; }
+.topic-library-tools { display:flex; align-items:flex-end; gap:12px; margin:20px 0; }
+.topic-library-tools label { min-width:0; flex:1; max-width:240px; margin:0; }
+.topic-library-tools button { flex-shrink:0; }
+.topic-library-list { border:1px solid var(--line); border-radius:16px; overflow:hidden; background:var(--card); }
+.topic-library-row { display:flex; align-items:center; gap:8px; padding:16px; border-bottom:1px solid var(--line); }
+.topic-library-row:last-child { border-bottom:0; }
+.topic-library-row > div { min-width:0; flex:1; }
+.topic-library-row b { display:block; overflow-wrap:anywhere; font-size:14px; font-weight:550; }
+.topic-library-row small { display:block; color:var(--muted); font-size:11px; margin-top:5px; }
+.topic-icon-button { border:1px solid var(--line); background:var(--bg); color:var(--accent); padding:10px; border-radius:10px; cursor:pointer; font-size:11px; flex-shrink:0; min-height:42px; }
+.topic-delete { color:var(--bad); }
+@media(max-width:650px) {
+  .topic-editor-heading { flex-direction:column; gap:12px; }
+  .topic-editor-heading a { align-self:flex-start; }
+  .topic-assignment { padding:12px; }
+  .topic-question-controls { flex-wrap:wrap; }
+  .topic-question-controls .field { flex-basis:100%; }
+  .topic-question-controls .btn { width:100%; }
+  .topic-library-row { padding:14px 12px; flex-wrap:wrap; gap:8px; }
+  .topic-library-row > div { flex-basis:100%; }
+  .topic-library-row .topic-icon-button { min-width:74px; }
+}

@@ -1,0 +1,18 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const ctx={localStorage:{getItem(){return null},setItem(){}},crypto:require('crypto').webcrypto,console};vm.createContext(ctx);
+for(const file of ['store','topic-seeds','topics'])vm.runInContext(fs.readFileSync(`app/js/${file}.js`,'utf8'),ctx);
+const run=code=>vm.runInContext(code,ctx);
+assert.equal(run('Topics.list(5).length'),20);assert.equal(run('Topics.list(7).length'),22);
+assert.equal(run("Topics.formatQuestions(Topics.parseQuestions('1-12, 14-20',20))"),'1-12, 14-20');
+for(const value of ['0','21','12-2','1,,4','2.5','2 foo'])assert.throws(()=>run(`Topics.parseQuestions(${JSON.stringify(value)},20)`));
+run(`const rows=[{name:'X',text:'1-12,14-20',topicId:'x',grade:5},{name:'Y',text:'13',topicId:'y',grade:5}];const mapped=Topics.assignments(rows,20);`);
+assert.equal(run('mapped.length'),3);assert.equal(run('mapped[1].from'),13);assert.equal(run('mapped[2].to'),20);
+assert.throws(()=>run("Topics.assignments([{name:'X',text:'1-12'},{name:'Y',text:'12-20'}],20)"));
+run(`const cls=Store.saveClass({name:'5A'}),st=Store.addStudent(cls.id,'Örnek Öğrenci','1');const exam=Store.saveExam({classId:cls.id,name:'Test',questionCount:20,key:Array(20).fill(0),topics:mapped});const r=Store.saveResult(exam.id,st.id,Array(20).fill(0));`);
+assert.equal(run('Store.examTopics(exam).length'),2);assert.equal(run('Store.topicScores(exam,r)[0].total'),19);assert.equal(run('Store.topicScores(exam,r)[1].total'),1);
+run("Topics.setShared([{id:'math-5-aci',grade:5,name:'Yeni Açı',unit:'Tema',deleted:false}])");assert(run("Topics.list(5).some(t=>t.name==='Yeni Açı')"));
+run("Topics.setShared([{id:'math-5-aci',grade:5,name:'Açı',unit:'',deleted:true}])");assert.equal(run('Topics.list(5).length'),19);
+run("Topics.setShared([{id:'custom-test',grade:7,name:'Özel konu',unit:'Tema',deleted:false}])");assert.equal(run('Topics.list(7).length'),23);
+assert(run('Topics.editor(exam)').includes('1-12, 14-20'));
+run('exam.topics=[{name:"Eski konu",from:1,to:3},{name:"Eski konu",from:7,to:9}]');assert.equal(run('Store.topicScores(exam,r)[0].total'),6);
+console.log('PASS: exact source topic counts, range/list parsing, bounds, overlap prevention, nonconsecutive topic aggregation, legacy ranges, shared edits/deletes/additions.');

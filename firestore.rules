@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Her öğretmen yalnızca kendi verisini okuyup yazabilir
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Ortak konu listesi: giriş yapan her öğretmen ekleyebilir, düzenleyebilir, silebilir.
+    match /topicCatalog/{topicId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasOnly(['name', 'grade', 'unit', 'deleted', 'updatedBy', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 140
+        && request.resource.data.unit is string && request.resource.data.unit.size() <= 140
+        && request.resource.data.grade is int && request.resource.data.grade >= 1 && request.resource.data.grade <= 12
+        && request.resource.data.deleted is bool
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if request.auth != null;
+    }
+
+    // Veli sayfası (matematik.win): belge kimliği 8 haneli veli kodudur.
+    // Kodu bilen herkes tek belgeyi okuyabilir; kimse listeleyemez (öğretmen yalnız kendi belgelerini).
+    // Belgeyi yalnızca uid alanındaki öğretmen yazar ve siler; başkasının kodu alınamaz.
+    match /parentResults/{code} {
+      allow get: if code.matches('^[0-9]{8}$');
+      allow list: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow create: if request.auth != null && code.matches('^[0-9]{8}$')
+        && request.resource.data.uid == request.auth.uid;
+      allow update: if request.auth != null && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+  }
+}

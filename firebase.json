@@ -1,0 +1,53 @@
+{
+  "hosting": [
+    {
+      "target": "ogretmen",
+      "public": "app",
+      "ignore": [
+        "**/.*"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "target": "veli",
+      "public": "veli",
+      "ignore": [
+        "**/.*"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "functions": {
+    "source": "functions",
+    "codebase": "optik-admin",
+    "runtime": "nodejs22",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "*.log"
+    ]
+  }
+}

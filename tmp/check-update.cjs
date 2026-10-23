@@ -1,0 +1,21 @@
+const vm=require('vm'),fs=require('fs'),assert=require('assert');
+const current=JSON.parse(fs.readFileSync('app/release.json','utf8')).version;
+let now=1000,version=current,reloads=0,online=true;
+const timers=[],listeners={};
+const title={},detail={},banner={hidden:true,setAttribute(){},querySelector(s){return s==='strong'?title:detail}};
+const modal={hidden:true},scanner={hidden:true};
+const document={hidden:false,createElement(){return banner},body:{prepend(){}},getElementById(id){return {modal,scanner}[id]},addEventListener(k,f){listeners[k]=f}};
+const ctx={document,navigator:{onLine:true},window:{addEventListener(){}},location:{reload(){reloads++}},Date:{now:()=>now},AbortSignal:{timeout(){}},fetch:async()=>{if(!online)throw Error('offline');return{ok:true,json:async()=>({version})}},setInterval(f,ms){timers.push({f,ms})},setTimeout(f){ctx.initial=f}};
+vm.runInNewContext(fs.readFileSync('app/js/update.js','utf8'),ctx);
+const check=timers.find(t=>t.ms===30000).f,tick=timers.find(t=>t.ms===1000).f;
+const settle=()=>new Promise(r=>setImmediate(r));
+(async()=>{
+ await check();assert(banner.hidden);assert.equal(reloads,0);
+ version=current+'.next';await check();assert.equal(title.textContent,'30 sn sonra güncellenecek');
+ for(let i=0;i<10;i++){now+=1000;tick()}assert.equal(title.textContent,'20 sn sonra güncellenecek');
+ modal.hidden=false;for(let i=0;i<40;i++){now+=1000;tick()}assert.equal(reloads,0);
+ modal.hidden=true;document.hidden=true;now+=60000;tick();assert.equal(reloads,0);
+ document.hidden=false;tick();assert.equal(title.textContent,'20 sn sonra güncellenecek');
+ for(let i=0;i<20;i++){now+=1000;tick()}await settle();assert.equal(reloads,1);
+ console.log('PASS: unchanged version, new version banner, 30-second countdown, modal pause, hidden-tab pause, reload.');
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -1,0 +1,13 @@
+{
+  "projects": {
+    "default": "optik-form-903ed"
+  },
+  "targets": {
+    "optik-form-903ed": {
+      "hosting": {
+        "ogretmen": ["optik-form-903ed"],
+        "veli": ["matematik-win"]
+      }
+    }
+  }
+}

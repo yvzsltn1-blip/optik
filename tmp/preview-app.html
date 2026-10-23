@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="tr">
+<head><base href="/app/">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Optik">
+<meta name="theme-color" content="#f5f6f8">
+<title>Optik Okuyucu</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <button id="back" class="icon-btn" aria-label="Geri">‹</button>
+    <h1 id="title">Optik Okuyucu</h1>
+    <div id="top-actions"></div>
+  </header>
+  <main id="view"></main>
+  <nav id="tabs">
+    <a href="#/classes" data-tab="classes"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 5v2"/></svg>Sınıflar</a>
+    <a href="#/exams" data-tab="exams"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="5" y="4" width="14" height="18" rx="3"/><path d="M9 4V2h6v2M9 10h6m-6 4h6m-6 4h3"/></svg>Sınavlar</a>
+    <a href="#/settings" data-tab="settings"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--card)"/><circle cx="15" cy="17" r="3" fill="var(--card)"/></svg>Ayarlar</a>
+  </nav>
+</div>
+
+<div id="scanner" hidden>
+  <video id="scan-video" playsinline muted autoplay></video>
+  <canvas id="scan-overlay"></canvas>
+  <div class="scan-top">
+    <button class="scan-close" data-scan="close" aria-label="Kapat">✕</button>
+    <div class="scan-title"><b id="scan-exam"></b><small id="scan-count"></small></div>
+    <button class="scan-chip" data-scan="torch" id="scan-torch" hidden>🔦</button>
+  </div>
+  <div class="scan-frame"><i></i><i></i><i></i><i></i></div>
+  <div class="scan-bottom">
+    <div id="scan-status" class="scan-status">Kamera açılıyor…</div>
+    <div id="scan-card" class="scan-card" hidden></div>
+    <div class="scan-tools">
+      <label class="scan-chip"><input type="checkbox" id="scan-auto"> Otomatik kaydet</label>
+      <label class="scan-chip">🖼 Fotoğraftan<input type="file" id="scan-file" accept="image/*" hidden></label>
+    </div>
+  </div>
+</div>
+
+<div id="modal" hidden></div>
+<div id="toast" hidden></div>
+<div id="auth" hidden></div>
+
+<script>
+const memory = new Map();
+Object.defineProperty(window, 'localStorage', {value:{getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,String(v)),removeItem:k=>memory.delete(k)}});
+Object.defineProperty(navigator, 'serviceWorker', {value:undefined});
+window.addEventListener('error', e => parent.postMessage({error:e.message}, '*'));
+</script><script src="js/layout.js"></script>
+<script src="js/omr.js"></script>
+<script src="js/store.js"></script>
+<script src="js/pdf.js"></script>
+<script src="js/report.js"></script>
+<script src="js/scanner.js"></script>
+<script>// Geliştirme için örnek veri: bir sınıf, öğrenciler, anahtarlı bir sınav ve rastgele sonuçlar.
+let seed = 3;
+const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+const c = Store.saveClass({ name: '8-A' });
+const names = ['Ayşe Yılmaz', 'Mehmet Demir', 'Zeynep Kaya', 'Can Öztürk', 'Elif Şahin', 'Burak Çelik', 'Defne Aydın', 'Emir Arslan', 'Ece Doğan', 'Kerem Koç', 'Nil Kurt', 'Arda Polat'];
+const studs = names.map((n, i) => Store.addStudent(c.id, n, String(101 + i)));
+const key = Array.from({ length: 40 }, () => Math.floor(rnd() * 5));
+const ex1 = Store.saveExam({ name: 'Matematik 1. Deneme', classId: c.id, date: '2026-10-10', questionCount: 40, optionCount: 5, format: 'a4', penalty: 4, key });
+const ex2 = Store.saveExam({ name: 'Fen Tarama', classId: c.id, date: '2026-10-18', questionCount: 20, optionCount: 5, format: 'a6', penalty: 0, key: key.slice(0, 20) });
+// Kitapçıklı sınav: B anahtarı A'dan farklı (her cevap bir kaydırılmış)
+const keyA = key.slice(0, 20).map((k) => k % 4);
+const ex3 = Store.saveExam({ name: 'Kitapçıklı Test', classId: c.id, date: '2026-10-20', questionCount: 20, optionCount: 4, format: 'a6', penalty: 0, booklets: 2, key: keyA, extraKeys: [keyA.map((k) => (k + 1) % 4)] });
+studs.slice(0, 10).forEach((s, si) => {
+  const skill = 0.45 + si * 0.05;
+  for (const e of [ex1, ex2]) {
+    const ans = e.key.map((k, qi) => { const r = rnd(); return r < skill * (qi % 7 === 3 ? 0.5 : 1) ? k : r > 0.93 ? null : Math.floor(rnd() * 5); });
+    Store.saveResult(e.id, s.id, ans);
+  }
+});
+document.title = 'SEEDED ' + ex1.id;
+
+Store.saveExam({...ex1, scoring:'puan', topics:[{name:'Çarpanlar ve katlar',from:1,to:10},{name:'Üslü ifadeler',from:11,to:20},{name:'Kareköklü ifadeler',from:21,to:30},{name:'Veri analizi ve olasılık',from:31,to:40}]});
+window.Cloud = {name:'Selin Yılmaz'};
+location.hash = '#/exam/'+ex1.id+'/stats';
+</script><script src="js/app.js"></script>
+
+</body>
+</html>
+<script>
+window.addEventListener('message',e=>{
+  if(e.data.route){ location.hash=e.data.route.replace('EXAM', ex1.id).replace('STUDENT', studs[0].id); }
+  if(e.data.check){
+    const over=document.documentElement.scrollWidth > innerWidth;
+    parent.postMessage({check: innerWidth+'px '+location.hash+': '+(over?'OVERFLOW':'OK')}, '*');
+  }
+});
+window.addEventListener('hashchange',()=>parent.postMessage({ready:true},'*'));
+parent.postMessage({ready:true},'*');
+</script><script src="/tmp/verify-ui.js"></script>

@@ -1,0 +1,54 @@
+[
+  {
+    "name": "Question detail opens",
+    "ok": true
+  },
+  {
+    "name": "Question detail closes",
+    "ok": true
+  },
+  {
+    "name": "Question table expands",
+    "ok": true
+  },
+  {
+    "name": "Table question opens detail",
+    "ok": true
+  },
+  {
+    "name": "Report preview is generated",
+    "ok": true
+  },
+  {
+    "name": "Rank option updates",
+    "ok": true
+  },
+  {
+    "name": "Text format works",
+    "ok": true
+  },
+  {
+    "name": "Image format works",
+    "ok": true
+  },
+  {
+    "name": "Report text inside canvas",
+    "ok": true
+  },
+  {
+    "name": "JPG blob export",
+    "ok": true
+  },
+  {
+    "name": "Long report text inside canvas",
+    "ok": true
+  },
+  {
+    "name": "All 12 topics included",
+    "ok": true
+  },
+  {
+    "name": "All 100 question numbers included",
+    "ok": true
+  }
+]

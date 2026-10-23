@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>cloud-debug</title>
+<div id="modal" hidden></div><div id="scanner" hidden></div><div id="auth" hidden></div>
+<script src="../app/js/store.js"></script>
+<script type="module">
+// cloud.js modülünün yüklenip giriş durumunu bildirdiğini kontrol eder.
+const t0 = Date.now();
+window.addEventListener('error', (e) => (document.title = 'HATA ' + e.message));
+import('../app/js/cloud.js').then(() => {
+  document.title = 'modul yuklendi';
+  const iv = setInterval(() => {
+    if (!document.getElementById('auth').hidden) { document.title = 'GIRIS EKRANI ' + (Date.now() - t0) + 'ms'; clearInterval(iv); }
+  }, 100);
+}).catch((e) => (document.title = 'IMPORT HATASI ' + e));
+</script>

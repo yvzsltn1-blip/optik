@@ -1,0 +1,46 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>real-test</title>
+<pre id="out">çalışıyor…</pre>
+<canvas id="c" style="max-width:600px"></canvas>
+<script src="../app/js/layout.js"></script>
+<script src="../app/js/omr.js"></script>
+<script>
+// Gerçek telefon fotoğraflarıyla okuma testi. Her kayıt: dosya, sınav ayarları, beklenen cevaplar
+// (indeks: A=0…; null = boş). Görüntü kamera çözünürlüğüne (en uzun kenar 1280) küçültülür.
+const N = null;
+const fixtures = [
+  { file: 'fixtures/gercek-a6-golge.jpeg', exam: { format: 'a6', questionCount: 20, optionCount: 4 }, id: 2,
+    truth: [0, 0, 1, 1, 2, 2, 3, 3, 0, 0, 2, 3, 3, 2, 2, N, N, N, N, 0] },
+];
+const L = 'ABCD';
+const fmtA = (a) => (a == null ? '-' : a === -1 ? '*' : L[a]);
+(async () => {
+  const out = [];
+  for (const f of fixtures) {
+    const img = new Image();
+    img.src = f.file;
+    await img.decode();
+    const s = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.getElementById('c');
+    c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    const t0 = performance.now();
+    const res = OMR.readAll(ctx.getImageData(0, 0, c.width, c.height), f.exam, (id) => id === f.id);
+    const ms = Math.round(performance.now() - t0);
+    if (!res.ok) { out.push(`${f.file}: BAŞARISIZ ${res.reason} ${ms}ms`); continue; }
+    const form = res.forms.find((x) => x.id === f.id);
+    if (!form) { out.push(`${f.file}: form #${f.id} bulunamadı (bulunan: ${res.forms.map((x) => x.id)})`); continue; }
+    let ok = 0;
+    const rows = f.truth.map((t, i) => {
+      const a = form.answers[i];
+      if (a === t) ok++;
+      return `${String(i + 1).padStart(2)}: ${fmtA(t)} ${fmtA(a)} ${a === t ? '  ' : '✗ '}[${form.scores[i].map((v) => v.toFixed(2)).join(' ')}]`;
+    });
+    out.push(`${f.file}: ${ok}/${f.truth.length} doğru | ${ms}ms | köşeler ${JSON.stringify(form.corners.map((p) => p.map(Math.round)))}\n  ${rows.join('\n  ')}`);
+  }
+  document.getElementById('out').textContent = out.join('\n\n');
+  document.title = 'BITTI';
+})().catch((e) => { document.getElementById('out').textContent = 'HATA ' + e.stack; document.title = 'BITTI'; });
+</script>

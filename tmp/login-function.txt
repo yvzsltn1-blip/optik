@@ -1,0 +1,38 @@
+// Yeni hesapları yalnızca yönetici oluşturur; herkese açık kayıt formu yoktur.
+function showLogin(mode, email = '') {
+  const el = $('#auth');
+  el.innerHTML = `<form class="auth-box" novalidate>
+    <img src="icons/icon-192.png" alt="" width="72" height="72">
+    <h1>Optik Okuyucu</h1><p class="muted small">Hesabınızla giriş yapın. Yeni hesap için yöneticinizle iletişime geçin.</p>
+    <label class="field"><span>E-posta</span><input type="email" name="email" autocomplete="username" inputmode="email" autocapitalize="off" value="${escHtml(email)}"></label>
+    <label class="field"><span>Şifre</span><span class="pass-wrap"><input type="password" name="pass" autocomplete="current-password"><button type="button" class="pass-eye" data-eye>Göster</button></span></label>
+    <p class="auth-msg" id="auth-msg"></p><button class="btn primary block big-ish" data-submit>Giriş yap</button>
+    <button type="button" class="link-btn" data-reset>Şifremi unuttum</button></form>`;
+  el.hidden = false;
+  const form = el.querySelector('form'), f = form.elements;
+  const msg = (text, ok) => { $('#auth-msg').textContent = text; $('#auth-msg').className = 'auth-msg' + (ok ? ' ok' : ''); };
+  const busy = on => {
+    form.querySelectorAll('button,input').forEach(b => b.disabled = on);
+    form.querySelector('[data-submit]').textContent = on ? 'Lütfen bekleyin…' : 'Giriş yap';
+  };
+  form.querySelector('[data-eye]').onclick = e => { const show = f.pass.type === 'password'; f.pass.type = show ? 'text' : 'password'; e.target.textContent = show ? 'Gizle' : 'Göster'; };
+  form.querySelector('[data-reset]').onclick = async () => {
+    const address = f.email.value.trim();
+    if (!address) { f.email.focus(); return msg('Şifre sıfırlama bağlantısı için e-posta adresinizi yazın.'); }
+    busy(true);
+    try { await sendPasswordResetEmail(auth, address); msg('Hesap kayıtlıysa şifre sıfırlama bağlantısı e-posta adresine gönderildi.', true); }
+    catch (error) { msg(ERRORS[error.code] || 'İşlem tamamlanamadı.'); }
+    busy(false);
+  };
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const address = f.email.value.trim(), pass = f.pass.value;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) { f.email.focus(); return msg('Geçerli bir e-posta yazın.'); }
+    if (!pass) { f.pass.focus(); return msg('Şifrenizi yazın.'); }
+    busy(true); msg('');
+    try { await signInWithEmailAndPassword(auth, address, pass); }
+    catch (error) { busy(false); msg(['auth/invalid-credential','auth/user-not-found','auth/wrong-password'].includes(error.code) ? 'E-posta veya şifre hatalı.' : ERRORS[error.code] || 'Giriş yapılamadı.'); }
+  };
+  setTimeout(() => (email ? f.pass : f.email).focus(), 50);
+}
+

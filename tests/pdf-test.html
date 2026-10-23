@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>pdf-test</title>
+<pre id="out"></pre>
+<script src="../app/js/layout.js"></script>
+<script src="../app/js/pdf.js"></script>
+<script>
+// 10 öğrencilik A6 PDF üretir; PDF'i base64 olarak #out içine yazar (Python ile çözülür).
+(async () => {
+  const cls = { name: '8-A' };
+  const exam = { name: 'Matematik Testi 3', format: 'a6', questionCount: 20, optionCount: 5 };
+  const forms = Array.from({ length: 10 }, (_, i) => ({ student: { id: 20 + i, name: 'Öğrenci Şükrü Ğİ ' + (i + 1), number: String(i + 1) }, exam, cls }));
+  const t0 = performance.now();
+  const blob = await PDF.sheets(forms, (i, n) => (document.title = 'sayfa ' + i + '/' + n));
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let s = '';
+  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  document.getElementById('out').textContent = btoa(s);
+  document.title = `PDF ${buf.length} bayt ${Math.round(performance.now() - t0)}ms`;
+})().catch((e) => (document.title = 'HATA ' + e));
+</script>

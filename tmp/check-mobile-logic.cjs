@@ -1,0 +1,18 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const els=new Map();
+const el=s=>{if(!els.has(s))els.set(s,{style:{},dataset:{},innerHTML:'',value:'',hidden:false,addEventListener(){},querySelectorAll(){return[]}});return els.get(s)};
+const ctx={console, setTimeout,clearTimeout, URL, Blob, Map, Set, Date, Math,localStorage:{getItem(){return null},setItem(){}},navigator:{userAgent:''},location:{hash:'#/exams',protocol:'http:'},document:{querySelector:el,querySelectorAll(){return[]}},matchMedia(){return{matches:true}},addEventListener(){},scrollTo(){}};ctx.window=ctx;
+vm.createContext(ctx);
+for(const f of ['layout','store','topic-seeds','topics'])vm.runInContext(fs.readFileSync('app/js/'+f+'.js','utf8'),ctx);
+vm.runInContext(`const c1=Store.saveClass({name:'5A'}),c2=Store.saveClass({name:'5C'});for(const c of [c1,c2]) Store.saveExam({classId:c.id,name:'Matematik Kazanım Değerlendirme 1',date:'2026-10-22',questionCount:20,optionCount:4,key:Array(20).fill(0)});`,ctx);
+let app=fs.readFileSync('app/js/app.js','utf8').replace('window.App = { render };','window.App = { render, filteredExams, classColor, examRow, setFilter(c,q) {examClassFilter=c;examSearch=q;} };');
+vm.runInContext(app,ctx);
+assert.equal(ctx.App.filteredExams().length,2);
+ctx.App.setFilter('1','');assert.equal(ctx.App.filteredExams().length,1);
+ctx.App.setFilter('','5c');assert.equal(ctx.App.filteredExams().length,1);
+ctx.App.setFilter('','bulunmayan');assert.equal(ctx.App.filteredExams().length,0);
+ctx.App.setFilter('','');assert.equal(ctx.App.filteredExams().length,2);
+assert.notEqual(ctx.App.classColor(1),ctx.App.classColor(2));
+assert(el('#view').innerHTML.includes('class-badge'));
+ctx.location.hash='#/classes';ctx.App.render();assert(el('#view').innerHTML.includes('class-card'));
+console.log('PASS: actual Store + app rendering, class filter, search, no matches, reset, distinct class colors.');

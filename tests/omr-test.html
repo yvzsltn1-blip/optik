@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>OMR test</title>
+<style>body{font:14px monospace} canvas{max-width:30%;border:1px solid #ccc;margin:4px}</style>
+</head>
+<body>
+<pre id="out">çalışıyor…</pre>
+<div id="imgs"></div>
+<script src="../app/js/layout.js"></script>
+<script src="../app/js/omr.js"></script>
+<script>
+// Sentetik fotoğraf üretip okuyucuyu sınar. Sonuç #out içine yazılır.
+// ?norefine → ızgara ince ayarı kapalı (karşılaştırma için)
+const NOREFINE = location.search.includes('norefine');
+const PROF = {};
+let seed = 7;
+const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+
+function loadSVG(svg) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  });
+}
+
+// Bir formun işaretlerini (SVG) ve beklenen cevapları üretir. ox/oy: sayfadaki yeri (mm)
+function fillMarks(exam, ox = 0, oy = 0, pencil, bk = null) {
+  const fmt = Layout.fmtOf(exam.format);
+  const grid = Layout.grid(fmt, exam.questionCount, exam.optionCount);
+  const truth = [];
+  let marks = '';
+  const k = exam.optionCount;
+  grid.questions.forEach((q) => {
+    const r = rnd();
+    const ans = r < 0.08 ? null : r < 0.11 ? -1 : Math.floor(rnd() * k);
+    truth.push(ans);
+    const fill = (j, color, scale) => {
+      const [x, y] = q.opts[j];
+      const R = fmt.grid.r;
+      marks += `<ellipse cx="${ox + x + (rnd() - 0.5) * 0.4}" cy="${oy + y + (rnd() - 0.5) * 0.4}" rx="${R * 0.95 * scale}" ry="${R * 0.87 * scale}" fill="${color}" transform="rotate(${rnd() * 40 - 20} ${ox + x} ${oy + y})"/>`;
+    };
+    if (ans === -1) { fill(0, '#333', 1); fill(k - 1, '#2a2a2a', 1); }
+    else if (ans != null) {
+      fill(ans, pencil ? pencil[Math.floor(rnd() * pencil.length)] : rnd() < 0.5 ? '#3a3a3a' : '#555', 0.85 + rnd() * 0.2);
+      if (rnd() < 0.1) fill((ans + 1) % k, '#cfcfcf', 0.9); // silinmiş iz
+    }
+  });
+  if (Layout.bookletCount(exam) > 1 && bk != null) {
+    const b = Layout.bookletSpots(fmt, Layout.bookletCount(exam));
+    for (const j of bk === -1 ? [0, 1] : [bk]) {
+      const [x, y] = b.opts[j];
+      marks += `<ellipse cx="${ox + x}" cy="${oy + y}" rx="${b.r * 0.9}" ry="${b.r * 0.82}" fill="${pencil ? pencil[0] : '#444'}"/>`;
+    }
+  }
+  return { marks, truth, booklet: bk };
+}
+
+async function makeCase(c) {
+  const cls = { name: '7-A' };
+  const exam = { name: 'Matematik Testi', format: c.format, questionCount: c.q, optionCount: c.k, booklets: c.booklets || 1, refine: !NOREFINE };
+  const fmt = Layout.fmtOf(c.format);
+  let svg, pageW, pageH;
+  const expected = new Map(), expBk = new Map();
+  if (c.page) {
+    // Kesilmemiş A4 sayfası
+    const ids = c.ids;
+    const pos = fmt.perPage === 4 ? [[0, 0], [105, 0], [0, 148.5], [105, 148.5]] : [[0, 0], [0, 148.5]];
+    let marks = '';
+    ids.forEach((id, i) => { const m = fillMarks(exam, pos[i][0], pos[i][1], c.pencil, c.bk ? c.bk[i] : null); marks += m.marks; expected.set(id, m.truth); expBk.set(id, m.booklet); });
+    svg = Layout.pageSVG(fmt, ids.map((id) => ({ student: { id, name: 'Öğrenci ' + id, number: String(id) }, exam, cls }))).replace(/<\/svg>$/, marks + '</svg>');
+    pageW = 210; pageH = 297;
+  } else {
+    const m = fillMarks(exam, 0, 0, c.pencil, c.bk ? c.bk[0] : null);
+    expected.set(c.id, m.truth);
+    expBk.set(c.id, m.booklet);
+    svg = Layout.sheetSVG({ id: c.id, name: 'Deneme Öğrenci', number: '123' }, exam, cls).replace(/<\/svg>$/, m.marks + '</svg>');
+    pageW = fmt.w; pageH = fmt.h;
+  }
+  const img = await loadSVG(svg);
+  const S = 8; // px/mm
+  const src = document.createElement('canvas');
+  src.width = pageW * S; src.height = pageH * S;
+  src.getContext('2d').drawImage(img, 0, 0, src.width, src.height);
+  const sd = src.getContext('2d').getImageData(0, 0, src.width, src.height).data;
+  if (c.stripes) {
+    // Mürekkebi azalmış yazıcı: koyu alanlar yatay şeritler hâlinde basılır
+    for (let y = 0; y < src.height; y++) {
+      if (y % c.stripes >= c.stripes * 0.4) continue;
+      for (let x = 0; x < src.width; x++) { const i = (y * src.width + x) * 4; if (sd[i] < 90) sd[i] = 235; }
+    }
+  }
+
+  // Hedef "fotoğraf": kâğıt köşeleri perspektifle yerleştirilir
+  const W = c.W, Hh = c.H;
+  const Hinv = OMR.homography(c.corners, [[0, 0], [src.width, 0], [src.width, src.height], [0, src.height]]);
+  const out = document.createElement('canvas');
+  out.width = W; out.height = Hh;
+  const ctx = out.getContext('2d');
+  const od = ctx.createImageData(W, Hh);
+  for (let y = 0; y < Hh; y++) {
+    for (let x = 0; x < W; x++) {
+      let [sx, sy] = OMR.project(Hinv, x, y);
+      if (c.curl) {
+        // Kıvrık kâğıt: köşeler yerinde kalır, orta kısım dalgalanır (genlik mm)
+        const u = sx / src.width, v2 = sy / src.height;
+        sy += c.curl * S * Math.sin(Math.PI * u) * Math.sin(Math.PI * v2);
+        sx += c.curl * S * 0.6 * Math.sin(2 * Math.PI * v2) * Math.sin(Math.PI * u);
+      }
+      let v;
+      const xi = Math.round(sx), yi = Math.round(sy);
+      if (xi >= 0 && yi >= 0 && xi < src.width && yi < src.height) v = sd[(yi * src.width + xi) * 4];
+      else v = 90 + ((x >> 4) + (y >> 4)) % 2 * (c.bg || 25); // masa
+      v = v * c.light(x / W, y / Hh) + (rnd() - 0.5) * c.noise;
+      const i = (y * W + x) * 4;
+      od.data[i] = od.data[i + 1] = od.data[i + 2] = Math.max(0, Math.min(255, v));
+      od.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(od, 0, 0);
+  if (c.blur) { ctx.filter = `blur(${c.blur}px)`; ctx.drawImage(out, 0, 0); ctx.filter = 'none'; }
+  document.getElementById('imgs').appendChild(out);
+  const t0 = performance.now();
+  const prof = {};
+  const res = OMR.readAll(ctx.getImageData(0, 0, W, Hh), exam, (id) => expected.has(id), prof);
+  const ms = Math.round(performance.now() - t0);
+  for (const k in prof) PROF[k] = (PROF[k] || 0) + prof[k];
+  if (!res.ok) return `${c.name}: BAŞARISIZ (${res.reason}, id=${res.id}) ${ms}ms`;
+  const lines = [];
+  let total = 0, okCount = 0;
+  for (const f of res.forms) {
+    const truth = expected.get(f.id);
+    if (exam.booklets > 1) { total++; const e = expBk.get(f.id) ?? null; if (f.booklet === e) okCount++; else lines.push(`#${f.id} kitapçık: beklenen ${e} okunan ${f.booklet} [${f.bookletScores.map((v) => v.toFixed(2))}]`); }
+    truth.forEach((t, i) => { total++; if (t === f.answers[i]) okCount++; else lines.push(`#${f.id} ${i + 1}: beklenen ${t} okunan ${f.answers[i]} [${f.scores[i].map((s) => s.toFixed(2))}]`); });
+  }
+  const missing = [...expected.keys()].filter((id) => !res.forms.some((f) => f.id === id));
+  const unsure = res.forms.reduce((n, f) => n + f.uncertain.length, 0);
+  return `${c.name}: ${res.forms.length}/${expected.size} form bulundu${missing.length ? ' (EKSİK ' + missing + ')' : ''}${unsure ? ` · ${unsure} şüpheli` : ''} | ${okCount}/${total} cevap doğru | ${ms}ms` + (lines.length ? '\n  ' + lines.join('\n  ') : '');
+}
+
+const cases = [
+  { name: 'A4 düz-40', format: 'a4', id: 1234, q: 40, k: 5, W: 900, H: 1200, corners: [[80, 70], [820, 70], [820, 1120], [80, 1120]], light: () => 1, noise: 10 },
+  { name: 'A4 perspektif-100', format: 'a4', id: 77, q: 100, k: 5, W: 1080, H: 1440, corners: [[140, 110], [960, 60], [1010, 1380], [70, 1300]], light: (x) => 0.75 + 0.3 * x, noise: 16, blur: 0.8 },
+  { name: 'A4 gölge-20-4şık', format: 'a4', id: 65000, q: 20, k: 4, W: 720, H: 1280, corners: [[60, 160], [670, 190], [650, 1080], [40, 1050]], light: (x, y) => (x + y < 0.9 ? 0.55 : 0.95), noise: 14 },
+  { name: 'A4 ters-60', format: 'a4', id: 3, q: 60, k: 5, W: 1000, H: 1300, corners: [[900, 1220], [110, 1240], [90, 80], [880, 60]], light: (x, y) => 0.9 - 0.25 * y, noise: 12 },
+  { name: 'A4 uzak-desenli-50', format: 'a4', id: 4242, q: 50, k: 5, W: 1080, H: 1440, bg: 120, corners: [[330, 380], [760, 400], [750, 1010], [320, 990]], light: () => 0.95, noise: 10 },
+  { name: 'A4 yan-30', format: 'a4', id: 500, q: 30, k: 5, W: 1440, H: 1080, corners: [[1350, 90], [1370, 1000], [80, 980], [110, 70]], light: () => 0.85, noise: 12, blur: 1 },
+  { name: 'A5 eğik-40', format: 'a5', id: 321, q: 40, k: 5, W: 1280, H: 960, corners: [[90, 120], [1180, 80], [1210, 860], [60, 830]], light: (x) => 0.8 + 0.2 * x, noise: 12, blur: 0.6 },
+  { name: 'A6 tek-20', format: 'a6', id: 88, q: 20, k: 5, W: 720, H: 1280, corners: [[90, 200], [640, 230], [620, 1060], [70, 1040]], light: () => 0.9, noise: 12, blur: 0.6 },
+  { name: 'A6 tek-15-4şık-ters', format: 'a6', id: 9000, q: 15, k: 4, W: 720, H: 1280, corners: [[640, 1100], [80, 1080], [100, 180], [660, 150]], light: (x, y) => 0.7 + 0.25 * y, noise: 14 },
+  { name: 'A6 tek-30', format: 'a6', id: 12, q: 30, k: 5, W: 720, H: 1280, corners: [[120, 260], [600, 250], [610, 980], [110, 990]], light: () => 0.95, noise: 10, blur: 0.8 },
+  { name: 'A6 çizgili baskı + açık kalem', format: 'a6', id: 2, q: 20, k: 4, W: 960, H: 1280, stripes: 10, pencil: ['#8a8a8a', '#959595', '#7d7d7d'], corners: [[110, 150], [800, 160], [810, 1110], [120, 1100]], light: (x, y) => (x < 0.45 && y > 0.25 ? 0.6 : 1), noise: 12, blur: 0.8 },
+  { name: 'A4 çizgili baskı + açık kalem', format: 'a4', id: 345, q: 40, k: 5, W: 1080, H: 1440, stripes: 9, pencil: ['#909090', '#888'], corners: [[90, 100], [990, 120], [1000, 1360], [80, 1340]], light: (x) => 0.7 + 0.3 * x, noise: 14, blur: 0.8 },
+  { name: 'A6 kesilmemiş 4lü, çizgili, açık kalem', format: 'a6', page: true, ids: [61, 62, 63, 64], q: 20, k: 4, W: 1080, H: 1440, stripes: 8, pencil: ['#8c8c8c', '#9a9a9a'], corners: [[60, 90], [1020, 60], [1040, 1390], [40, 1370]], light: (x, y) => (y < 0.5 ? 0.75 : 1), noise: 12, blur: 0.6 },
+  { name: 'A6 kitapçık B', format: 'a6', id: 70, q: 20, k: 5, booklets: 2, bk: [1], W: 720, H: 1280, corners: [[90, 200], [640, 230], [620, 1060], [70, 1040]], light: () => 0.9, noise: 12, blur: 0.6 },
+  { name: 'A6 kitapçık boş', format: 'a6', id: 71, q: 15, k: 4, booklets: 4, bk: [null], W: 720, H: 1280, corners: [[100, 210], [630, 220], [640, 1040], [80, 1050]], light: () => 0.9, noise: 12 },
+  { name: 'A5 kitapçık iki işaret', format: 'a5', id: 72, q: 40, k: 5, booklets: 3, bk: [-1], W: 1280, H: 960, corners: [[90, 120], [1180, 80], [1210, 860], [60, 830]], light: (x) => 0.8 + 0.2 * x, noise: 12 },
+  { name: 'A4 kitapçık D açık kalem', format: 'a4', id: 73, q: 40, k: 5, booklets: 4, bk: [3], pencil: ['#909090', '#888'], stripes: 9, W: 1080, H: 1440, corners: [[90, 100], [990, 120], [1000, 1360], [80, 1340]], light: (x) => 0.7 + 0.3 * x, noise: 14, blur: 0.8 },
+  { name: 'A6 4lü sayfa kitapçık A/B/B/A', format: 'a6', page: true, ids: [81, 82, 83, 84], bk: [0, 1, 1, 0], booklets: 2, q: 20, k: 4, W: 1080, H: 1440, corners: [[60, 90], [1020, 60], [1040, 1390], [40, 1370]], light: (x) => 0.8 + 0.2 * x, noise: 12, blur: 0.6 },
+  { name: 'A4 kıvrık kâğıt-60', format: 'a4', id: 91, q: 60, k: 5, curl: 1.6, W: 1080, H: 1440, corners: [[100, 90], [990, 110], [1000, 1350], [90, 1330]], light: (x) => 0.8 + 0.2 * x, noise: 12, blur: 0.7 },
+  { name: 'A4 çok kıvrık-100', format: 'a4', id: 92, q: 100, k: 5, curl: 2.2, W: 1080, H: 1440, corners: [[120, 100], [970, 90], [990, 1360], [100, 1340]], light: () => 0.9, noise: 12, blur: 0.7 },
+  { name: 'A5 kıvrık-52', format: 'a5', id: 93, q: 52, k: 5, curl: 1.4, W: 1280, H: 960, corners: [[80, 110], [1190, 90], [1200, 860], [70, 850]], light: () => 0.9, noise: 12, blur: 0.6 },
+  { name: 'A6 kıvrık-30', format: 'a6', id: 94, q: 30, k: 5, curl: 1.1, W: 720, H: 1280, corners: [[100, 200], [630, 190], [640, 1050], [90, 1060]], light: () => 0.9, noise: 12, blur: 0.6 },
+  { name: 'A6 kesilmemiş 4lü sayfa-20', format: 'a6', page: true, ids: [41, 42, 43, 44], q: 20, k: 5, W: 1080, H: 1440, corners: [[60, 90], [1020, 60], [1040, 1390], [40, 1370]], light: (x) => 0.8 + 0.2 * x, noise: 12, blur: 0.6 },
+  { name: 'A5 kesilmemiş 2li sayfa-30', format: 'a5', page: true, ids: [51, 52], q: 30, k: 5, W: 1080, H: 1440, corners: [[80, 100], [1000, 80], [1020, 1370], [60, 1350]], light: () => 0.9, noise: 12 },
+];
+
+(async () => {
+  const lines = [];
+  for (const c of cases) {
+    try { lines.push(await makeCase(c)); } catch (e) { lines.push(c.name + ': HATA ' + e + ' ' + e.stack); }
+  }
+  lines.push('Aşama süreleri (tüm testler, ms): ' + Object.entries(PROF).map(([k, v]) => `${k} ${Math.round(v)}`).join(' · '));
+  document.getElementById('out').textContent = lines.join('\n');
+  document.title = 'BITTI';
+})();
+</script>
+</body>
+</html>

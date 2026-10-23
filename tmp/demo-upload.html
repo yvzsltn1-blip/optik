@@ -1,0 +1,37 @@
+<!doctype html><html lang="tr"><meta charset="utf-8"><title>Deneme hesabı veri yükleme</title>
+<style>body{font:16px/1.6 system-ui;max-width:650px;margin:50px auto;padding:20px;background:#f5f6f8;color:#182b3f}input,button{display:block;box-sizing:border-box;width:100%;padding:12px;margin:10px 0;border:1px solid #ccd4df;border-radius:10px;font:inherit}button{background:#246b66;color:white;cursor:pointer}pre{white-space:pre-wrap}</style>
+<h1>Deneme hesabı</h1><p>Veriler yalnızca aşağıda giriş yapılan hesaba yazılır. Diğer uygulama oturumları etkilenmez.</p>
+<form id="seed"><label>E-posta<input id="email" type="email" required autocomplete="off"></label><label>Şifre<input id="password" type="password" required autocomplete="off"></label><button>Deneme hesabına örnek verileri yükle</button></form><pre id="status" role="status">Hazırlanıyor…</pre>
+<script type="module">
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {getAuth,setPersistence,inMemoryPersistence,signInWithEmailAndPassword,updateProfile} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import {getFirestore,writeBatch,doc,getDocs,collection} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+const app=initializeApp({apiKey:'AIzaSyAziiYrvCwYV0J6jPz1Amkr_nFB3NKHPsI',projectId:'optik-form-903ed',appId:'1:590862780167:web:67c0f1d9bf070e8cb927a2'},'demo-populate');
+const auth=getAuth(app),db=getFirestore(app),status=document.querySelector('#status');
+await setPersistence(auth,inMemoryPersistence);
+status.textContent='Hazır. Deneme hesabı bilgilerini girin.';
+const encode=v=>Array.isArray(v)?v.some(Array.isArray)?{__json:JSON.stringify(v)}:v.map(encode):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,encode(x)])):v;
+document.querySelector('#seed').onsubmit=async e=>{
+ e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;
+ try{
+  const email=document.querySelector('#email').value.trim();
+  if(!/^demo\.optik\.20261022\.[a-f0-9]{4}@example\.com$/.test(email))throw Error('Bu araç yalnızca yeni deneme hesabı için kullanılabilir.');
+  status.textContent='Deneme hesabına bağlanılıyor…';
+  const {user}=await signInWithEmailAndPassword(auth,email,document.querySelector('#password').value);
+  await updateProfile(user,{displayName:'Demo Öğretmen · Örnek Veriler'});
+  const data=await (await fetch('./demo-data.json')).json();
+  const writes=[];
+  for(const kind of ['classes','students','exams','results'])for(const obj of data[kind])writes.push([kind,kind==='results'?obj.examId+'_'+obj.studentId:String(obj.id),obj]);
+  const existing=await getDocs(collection(db,'users',user.uid,'classes'));
+  if(!existing.empty)throw Error('Hesap boş değil. Yeniden yüklemeye izin verilmedi.');
+  for(let i=0;i<writes.length;i+=250){
+   const batch=writeBatch(db);for(const [kind,id,obj]of writes.slice(i,i+250))batch.set(doc(db,'users',user.uid,kind,id),encode(obj));
+   await batch.commit();status.textContent=Math.min(i+250,writes.length)+' / '+writes.length+' kayıt yüklendi.';
+  }
+  const counts={};for(const kind of ['classes','students','exams','results'])counts[kind]=(await getDocs(collection(db,'users',user.uid,kind))).size;
+  if(Object.keys(counts).some(k=>counts[k]!==data[k].length))throw Error('Kayıt sayıları eşleşmedi.');
+  status.textContent='TAMAMLANDI\n'+user.email+'\n'+JSON.stringify(counts,null,2)+'\nSunucudan okunarak doğrulandı.';
+  document.querySelector('#password').value='';
+ }catch(error){status.textContent='HATA: '+error.message;button.disabled=false;}
+};
+</script></html>

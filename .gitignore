@@ -1,0 +1,6 @@
+*.apk
+.firebase/
+functions/node_modules/
+# demo hesabin sifresi
+tmp/demo-account.json
+tmp/demo-auth-request.json

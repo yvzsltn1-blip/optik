@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>seed</title>
+<script>localStorage.clear(); // veri katmanı yüklenmeden önce temizle</script>
+<script src="../app/js/layout.js"></script>
+<script src="../app/js/store.js"></script>
+<script>
+// Geliştirme için örnek veri: bir sınıf, öğrenciler, anahtarlı bir sınav ve rastgele sonuçlar.
+let seed = 3;
+const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+const c = Store.saveClass({ name: '8-A' });
+const names = ['Ayşe Yılmaz', 'Mehmet Demir', 'Zeynep Kaya', 'Can Öztürk', 'Elif Şahin', 'Burak Çelik', 'Defne Aydın', 'Emir Arslan', 'Ece Doğan', 'Kerem Koç', 'Nil Kurt', 'Arda Polat'];
+const studs = names.map((n, i) => Store.addStudent(c.id, n, String(101 + i)));
+const key = Array.from({ length: 40 }, () => Math.floor(rnd() * 5));
+const ex1 = Store.saveExam({ name: 'Matematik 1. Deneme', classId: c.id, date: '2026-10-10', questionCount: 40, optionCount: 5, format: 'a4', penalty: 4, key });
+const ex2 = Store.saveExam({ name: 'Fen Tarama', classId: c.id, date: '2026-10-18', questionCount: 20, optionCount: 5, format: 'a6', penalty: 0, key: key.slice(0, 20) });
+// Kitapçıklı sınav: B anahtarı A'dan farklı (her cevap bir kaydırılmış)
+const keyA = key.slice(0, 20).map((k) => k % 4);
+const ex3 = Store.saveExam({ name: 'Kitapçıklı Test', classId: c.id, date: '2026-10-20', questionCount: 20, optionCount: 4, format: 'a6', penalty: 0, booklets: 2, key: keyA, extraKeys: [keyA.map((k) => (k + 1) % 4)] });
+studs.slice(0, 10).forEach((s, si) => {
+  const skill = 0.45 + si * 0.05;
+  for (const e of [ex1, ex2]) {
+    const ans = e.key.map((k, qi) => { const r = rnd(); return r < skill * (qi % 7 === 3 ? 0.5 : 1) ? k : r > 0.93 ? null : Math.floor(rnd() * 5); });
+    Store.saveResult(e.id, s.id, ans);
+  }
+});
+document.title = 'SEEDED ' + ex1.id;
+</script>

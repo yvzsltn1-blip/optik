@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Optik">
+<meta name="theme-color" content="#f5f6f8">
+<title>Optik Okuyucu</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/insights.css">
+<link rel="stylesheet" href="css/topics.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <button id="back" class="icon-btn" aria-label="Geri">‹</button>
+    <h1 id="title">Optik Okuyucu</h1>
+    <div id="top-actions"></div>
+  </header>
+  <main id="view"></main>
+  <nav id="tabs">
+    <a href="#/classes" data-tab="classes"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 5v2"/></svg>Sınıflar</a>
+    <a href="#/exams" data-tab="exams"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="5" y="4" width="14" height="18" rx="3"/><path d="M9 4V2h6v2M9 10h6m-6 4h6m-6 4h3"/></svg>Sınavlar</a>
+    <a href="#/analytics" data-tab="analytics"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 20h16M7 16v-5m5 5V4m5 12V8" stroke-linecap="round"/></svg>İstatistikler</a>
+    <a href="#/settings" data-tab="settings"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--card)"/><circle cx="15" cy="17" r="3" fill="var(--card)"/></svg>Ayarlar</a>
+  </nav>
+</div>
+
+<div id="scanner" hidden>
+  <video id="scan-video" playsinline muted autoplay></video>
+  <canvas id="scan-overlay"></canvas>
+  <div class="scan-top">
+    <button class="scan-close" data-scan="close" aria-label="Kapat">✕</button>
+    <div class="scan-title"><b id="scan-exam"></b><small id="scan-count"></small></div>
+    <button class="scan-chip" data-scan="torch" id="scan-torch" hidden>🔦</button>
+  </div>
+  <div class="scan-frame"><i></i><i></i><i></i><i></i></div>
+  <div class="scan-bottom">
+    <div id="scan-status" class="scan-status">Kamera açılıyor…</div>
+    <div id="scan-card" class="scan-card" hidden></div>
+    <div class="scan-tools">
+      <label class="scan-chip"><input type="checkbox" id="scan-auto"> Otomatik kaydet</label>
+      <label class="scan-chip">🖼 Fotoğraftan<input type="file" id="scan-file" accept="image/*" hidden></label>
+    </div>
+  </div>
+</div>
+
+<div id="modal" hidden></div>
+<div id="toast" hidden></div>
+<div id="auth" hidden></div>
+
+<script src="js/layout.js"></script>
+<script src="js/omr.js"></script>
+<script src="js/store.js"></script>
+<script src="js/pdf.js"></script>
+<script src="js/report.js"></script>
+<script src="js/scanner.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/topic-seeds.js"></script>
+<script src="js/topics.js"></script>
+<script src="js/app.js"></script>
+<script src="js/update.js"></script>
+<script type="module" src="js/cloud.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>scan-e2e</title>
+<style>body{margin:0} iframe{width:500px;height:900px;border:0}</style>
+<iframe id="f"></iframe>
+<script>
+// Uygulamayı iframe içinde çalıştırır: sınavda "Optik okut" → fotoğraftan oku → Kaydet.
+// #a4: tek A4 form (sınav 14). #a6: kesilmemiş 4'lü A6 sayfası (sınav 15), dört form sırayla kaydedilir.
+// "&nosave" eklenirse ilk kartta durur (ekran görüntüsü için).
+const mode = location.hash.includes('a6') ? 'a6' : 'a4';
+const examId = mode === 'a6' ? 15 : 14;
+const f = document.getElementById('f');
+f.src = '../app/index.html#/exam/' + examId;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// Okuma ayrı iş parçacığında ve eşzamansız: sabit süre yerine koşul beklenir
+const until = async (fn, ms = 15000) => { const t = Date.now(); while (!fn() && Date.now() - t < ms) await wait(50); };
+const log = [];
+f.onload = () => run().catch((e) => (document.title = 'HATA ' + e + ' ' + e.stack));
+
+async function run() {
+  const win = f.contentWindow, d = win.document;
+  const Store = win.eval('Store'), Layout = win.eval('Layout');
+  await wait(300);
+  d.querySelector('[data-act=scan]').click();
+  await wait(500);
+  const exam = Store.getExam(examId);
+  const cls = Store.getClass(exam.classId);
+  const fmt = Layout.fmtOf(exam.format);
+  const ids = mode === 'a6' ? [10, 11, 12, 13] : [13];
+  const pos = mode === 'a6' ? [[0, 0], [105, 0], [0, 148.5], [105, 148.5]] : [[0, 0]];
+  const grid = Layout.grid(fmt, exam.questionCount, exam.optionCount);
+  const expected = {};
+  // Her öğrenci farklı sayıda doğru yapar: ilk n soru doğru, sonraki 3 yanlış, kalanı boş
+  let marks = '';
+  ids.forEach((id, s) => {
+    const n = mode === 'a6' ? 10 + s * 2 : 30;
+    const ans = exam.key.map((k, i) => (i < n ? k : i < n + 3 ? (k + 1) % 5 : null));
+    expected[id] = Store.score(exam, ans);
+    grid.questions.forEach((q, i) => {
+      if (ans[i] == null) return;
+      const [x, y] = q.opts[ans[i]];
+      marks += `<ellipse cx="${pos[s][0] + x}" cy="${pos[s][1] + y}" rx="${fmt.grid.r * 0.92}" ry="${fmt.grid.r * 0.84}" fill="#333"/>`;
+    });
+  });
+  const forms = ids.map((id) => ({ student: Store.getStudent(id), exam, cls }));
+  const svg = (mode === 'a6' ? Layout.pageSVG(fmt, forms) : Layout.sheetSVG(forms[0].student, exam, cls)).replace(/<\/svg>$/, marks + '</svg>');
+  const img = new Image();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  await img.decode();
+  const c = document.createElement('canvas');
+  c.width = 1200; c.height = 1600;
+  const x = c.getContext('2d');
+  x.fillStyle = '#6b5a48'; x.fillRect(0, 0, c.width, c.height);
+  x.translate(600, 800); x.rotate(-0.1); x.drawImage(img, -500, -707, 1000, 1414);
+  const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.85));
+  const dt = new DataTransfer();
+  dt.items.add(new File([blob], 'foto.jpg', { type: 'image/jpeg' }));
+  const input = d.getElementById('scan-file');
+  input.files = dt.files;
+  input.dispatchEvent(new Event('change'));
+  await until(() => !d.getElementById("scan-card").hidden || /bulunamadı|okunamadı|değil|kayıtlı/.test(d.getElementById("scan-status").textContent));
+  const card = d.getElementById('scan-card');
+  for (let i = 0; i < ids.length; i++) {
+    if (card.hidden) { log.push('KART YOK: ' + d.getElementById('scan-status').textContent); break; }
+    log.push(card.innerText.replace(/\s+/g, ' ').replace(/ (Tekrar oku|Kapat) Kaydet$/, ''));
+    if (location.hash.includes('nosave')) break;
+    const before = card.innerText;
+    card.querySelector('[data-scan=save]').click();
+    await until(() => card.hidden || card.innerText !== before, 5000);
+  }
+  if (!location.hash.includes('nosave')) {
+    log.push('SON DURUM: ' + d.getElementById('scan-status').textContent);
+    for (const id of ids) {
+      const r = Store.getResult(examId, id), sc = r && Store.score(exam, r.answers), e = expected[id];
+      log.push(`#${id} kayıt ${sc ? `D${sc.correct} Y${sc.wrong} B${sc.blank}` : 'YOK'} / beklenen D${e.correct} Y${e.wrong} B${e.blank} ${sc && sc.correct === e.correct && sc.wrong === e.wrong && sc.blank === e.blank ? 'OK' : 'HATALI'}`);
+    }
+  }
+  document.title = log.join(' || ');
+}
+</script>

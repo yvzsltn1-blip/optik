@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>sheet</title>
+<style>body{margin:0;background:#888} svg{display:block;margin:10px;background:#fff;width:840px;height:1188px}</style>
+<body>
+<script src="../app/js/layout.js"></script>
+<script>
+// Her boyuttan bir tam A4 sayfası önizlemesi. ?a4 / ?a5 / ?a6, kitapçık için &k=2..4
+const q = new URLSearchParams(location.search);
+const key = ['a4', 'a5', 'a6'].find((k) => q.has(k)) || 'a6';
+const fmt = Layout.fmtOf(key);
+const cls = { name: '8-A' };
+const exam = { name: 'Matematik Deneme Sınavı 3', format: key, questionCount: { a4: 40, a5: 30, a6: 20 }[key], optionCount: 5, booklets: +q.get('k') || 1 };
+const names = ['Ayşe Nur Yılmazoğlu', 'Mehmet Demir', 'Zeynep Kaya', 'Çağrı Öztürk'];
+document.body.innerHTML = Layout.pageSVG(fmt, names.slice(0, fmt.perPage).map((name, i) => ({ student: { id: 7 + i, name, number: String(101 + i) }, exam, cls })));
+</script>

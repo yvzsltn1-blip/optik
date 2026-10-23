@@ -1,0 +1,56 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>live-frame</title>
+<pre id="out"></pre>
+<script src="../app/js/layout.js"></script>
+<script>
+// Sahte kamera videosu için tek kare üretir: masa üzerinde hafif eğik duran, doldurulmuş bir form.
+// ?exam=a6&id=13&q=20&k=5&ans=0,1,2,…(-1 = boş)&light=0,3  → #out içine YUV420 karesi (base64)
+// ve beklenen cevaplar (JSON) yazılır. Video boyutu 1280×720 (yatay; form dik durur).
+(async () => {
+  const p = new URLSearchParams(location.search);
+  const fmtKey = p.get('exam') || 'a6';
+  const exam = { name: 'Fen Tarama', format: fmtKey, questionCount: +p.get('q') || 20, optionCount: +p.get('k') || 5, booklets: 1 };
+  const fmt = Layout.fmtOf(fmtKey);
+  const id = +p.get('id');
+  const ans = (p.get('ans') || '').split(',').map((v) => (v === '' || v === '-1' ? null : +v));
+  const light = (p.get('light') || '').split(',').filter(Boolean).map(Number); // açık kalemle işaretlenecek sorular
+  const grid = Layout.grid(fmt, exam.questionCount, exam.optionCount);
+  let marks = '';
+  grid.questions.forEach((q, i) => {
+    if (ans[i] == null) return;
+    const [x, y] = q.opts[ans[i]];
+    const color = light.includes(i) ? '#c9c9c9' : '#454545';
+    marks += `<ellipse cx="${x}" cy="${y}" rx="${fmt.grid.r * 0.9}" ry="${fmt.grid.r * 0.82}" fill="${color}"/>`;
+  });
+  const svg = Layout.sheetSVG({ id, name: 'Arda Polat', number: '112' }, exam, { name: '8-A' }).replace(/<\/svg>$/, marks + '</svg>');
+  const img = new Image();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  await img.decode();
+  const W = 1280, H = 720;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = '#7a6550'; x.fillRect(0, 0, W, H);
+  const h = 660, w = h * fmt.w / fmt.h;
+  x.translate(W / 2, H / 2); x.rotate(0.05); x.drawImage(img, -w / 2, -h / 2, w, h);
+  const d = x.getImageData(0, 0, W, H).data;
+  // RGB → YUV420 (BT.601)
+  const Y = new Uint8Array(W * H), U = new Uint8Array(W * H / 4), V = new Uint8Array(W * H / 4);
+  for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) {
+    const i = (yy * W + xx) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
+    Y[yy * W + xx] = Math.max(0, Math.min(255, Math.round(0.257 * r + 0.504 * g + 0.098 * b + 16)));
+    if (!(yy & 1) && !(xx & 1)) {
+      const j = (yy >> 1) * (W >> 1) + (xx >> 1);
+      U[j] = Math.max(0, Math.min(255, Math.round(-0.148 * r - 0.291 * g + 0.439 * b + 128)));
+      V[j] = Math.max(0, Math.min(255, Math.round(0.439 * r - 0.368 * g - 0.071 * b + 128)));
+    }
+  }
+  const all = new Uint8Array(Y.length + U.length + V.length);
+  all.set(Y); all.set(U, Y.length); all.set(V, Y.length + U.length);
+  let s = '';
+  for (let i = 0; i < all.length; i += 0x8000) s += String.fromCharCode.apply(null, all.subarray(i, i + 0x8000));
+  document.getElementById('out').textContent = btoa(s);
+  document.title = 'BITTI';
+})();
+</script>

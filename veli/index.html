@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5f6f8">
+<meta name="description" content="Veli kodunuzu girerek öğrencinin sınav sonuçlarını görün.">
+<title>Sınav Sonuçları</title>
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+:root {
+  --bg: #f5f6f8; --card: #fff; --text: #182b3f; --muted: #667587; --line: #e3e8ee;
+  --accent: #246b66; --ok: #26816d; --bad: #bc5351; --blank: #b7c0ca;
+  --soft-accent: #eaf2f1; --soft-bad: #fbefed;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101923; --card: #182431; --text: #edf2f7; --muted: #a1afbd; --line: #2d3b4a;
+    --accent: #85cbb9; --ok: #85cbb9; --bad: #ed9992; --blank: #4a5a6b;
+    --soft-accent: #253b3d; --soft-bad: #432f33;
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 560px; margin: 0 auto; padding: calc(env(safe-area-inset-top, 0px) + 40px) 16px calc(env(safe-area-inset-bottom, 0px) + 40px); }
+
+.entry { text-align: center; }
+.entry img { border-radius: 18px; }
+h1 { font-size: 24px; margin: 14px 0 6px; }
+.lead { color: var(--muted); margin: 0 0 22px; }
+#code {
+  width: 100%; max-width: 320px; padding: 16px 12px; border: 2px solid var(--line); border-radius: 18px;
+  background: var(--card); color: var(--text); text-align: center;
+  font: 600 30px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .12em;
+  outline: none; transition: border-color .15s;
+}
+#code:focus { border-color: var(--accent); }
+#code.bad { border-color: var(--bad); }
+#msg { min-height: 24px; margin: 12px 0 0; color: var(--muted); font-size: 15px; }
+#msg.bad { color: var(--bad); }
+
+.student { display: flex; align-items: center; gap: 14px; margin: 4px 0 18px; }
+.avatar { flex: none; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--soft-accent); color: var(--accent); font-weight: 700; font-size: 19px; }
+.student h2 { margin: 0; font-size: 21px; }
+.student p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.again { margin-left: auto; flex: none; border: 1px solid var(--line); background: var(--card); color: var(--accent); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+
+.exam { background: var(--card); border-radius: 20px; padding: 16px; }
+.exam + .exam { margin-top: 12px; }
+.exam-head { display: flex; align-items: flex-start; gap: 12px; }
+.exam-head div { flex: 1; min-width: 0; }
+.exam-head h3 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
+.exam-head small { color: var(--muted); }
+.score { text-align: right; flex: none; }
+.score b { display: block; font-size: 26px; line-height: 1.1; color: var(--accent); }
+.score span { font-size: 12px; color: var(--muted); }
+.bar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; background: var(--line); margin: 14px 0 12px; }
+.bar i { display: block; }
+.nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
+.nums div { background: var(--bg); border-radius: 12px; padding: 8px 2px; }
+.nums b { display: block; font-size: 19px; }
+.nums span { font-size: 12px; color: var(--muted); }
+.d b { color: var(--ok); } .y b { color: var(--bad); }
+.empty { background: var(--card); border-radius: 20px; padding: 28px 16px; text-align: center; color: var(--muted); }
+footer { margin-top: 26px; text-align: center; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <section class="entry" id="entry">
+    <img src="icon-192.png" alt="" width="64" height="64">
+    <h1>Sınav Sonuçları</h1>
+    <p class="lead">Öğretmeninizin verdiği 8 haneli veli kodunu yazın.</p>
+    <input id="code" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="9" placeholder="•••• ••••" aria-label="Veli kodu" autofocus>
+    <p id="msg" role="status"></p>
+  </section>
+  <section id="result" hidden></section>
+</main>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+// Öğretmen uygulamasıyla aynı Firebase projesi; veriler parentResults/{veli kodu} belgesinden okunur.
+// Belge dinlenir: öğretmen sonuç ekleyip silince açık sayfa kendiliğinden güncellenir.
+const app = initializeApp({
+  apiKey: 'AIzaSyAziiYrvCwYV0J6jPz1Amkr_nFB3NKHPsI',
+  authDomain: 'optik-form-903ed.firebaseapp.com',
+  projectId: 'optik-form-903ed',
+  appId: '1:590862780167:web:67c0f1d9bf070e8cb927a2',
+});
+const db = getFirestore(app);
+
+const $ = (s) => document.querySelector(s);
+const input = $('#code'), msg = $('#msg'), entry = $('#entry'), result = $('#result');
+const LS = 'veli-kodu';
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = (n) => (Number.isInteger(n) ? String(n) : (Math.round(n * 100) / 100).toString().replace('.', ','));
+const fmtDate = (s) => (s ? new Date(s + 'T00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
+const remember = (code) => { try { code ? localStorage.setItem(LS, code) : localStorage.removeItem(LS); } catch (e) { /* yok say */ } };
+
+function setMsg(text, bad) { msg.textContent = text; msg.className = bad ? 'bad' : ''; input.classList.toggle('bad', !!bad); }
+
+let unsub = null;
+function stop() { unsub?.(); unsub = null; }
+
+function backToEntry(text) {
+  stop();
+  remember('');
+  result.hidden = true;
+  entry.hidden = false;
+  setMsg(text || '', !!text);
+  input.focus();
+  input.select();
+}
+
+function lookup(code) {
+  stop();
+  input.blur();
+  setMsg('Sonuçlar getiriliyor…');
+  let first = true;
+  unsub = onSnapshot(doc(db, 'parentResults', code), (snap) => {
+    if (!snap.exists()) {
+      // Bağlantı yokken gelen boş önbellek cevabı "kod yok" anlamına gelmez; sunucuyu bekle
+      if (snap.metadata.fromCache) return;
+      // İlk sorguda yoksa kod yanlış; sonradan yok olduysa öğretmen kodu değiştirmiş ya da öğrenciyi silmiştir
+      backToEntry(first ? 'Bu koda ait öğrenci bulunamadı. Kodu kontrol edip tekrar yazın.'
+        : 'Bu kod artık geçerli değil. Güncel kodu öğretmeninizden isteyin.');
+      return;
+    }
+    remember(code);
+    show(snap.data(), first);
+    first = false;
+  }, (e) => {
+    console.error(e);
+    stop();
+    setMsg('Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin.', true);
+  });
+}
+
+function show(d, first) {
+  const y = window.scrollY;
+  const initials = String(d.name || '').split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toLocaleUpperCase('tr');
+  const sub = [d.className, d.teacher].filter(Boolean).map(esc).join(' · ');
+  const exams = d.exams || [];
+  result.innerHTML = `
+    <div class="student"><span class="avatar" aria-hidden="true">${esc(initials)}</span>
+      <div><h2>${esc(d.name)}</h2>${sub ? `<p>${sub}</p>` : ''}</div>
+      <button class="again" type="button" id="again">Başka kod</button></div>
+    ${exams.length ? exams.map((x) => {
+      const q = x.questions || 0, pct = (n) => (q ? (n / q) * 100 : 0);
+      return `<article class="exam">
+        <div class="exam-head"><div><h3>${esc(x.name)}</h3><small>${fmtDate(x.date)}</small></div>
+          <div class="score"><b>${num(x.score)}</b><span>${esc(x.scoreLabel)}</span></div></div>
+        <div class="bar" aria-hidden="true"><i style="width:${pct(x.correct)}%;background:var(--ok)"></i><i style="width:${pct(x.wrong)}%;background:var(--bad)"></i><i style="width:${pct(x.blank)}%;background:var(--blank)"></i></div>
+        <div class="nums"><div><b>${q}</b><span>Soru</span></div><div class="d"><b>${x.correct}</b><span>Doğru</span></div><div class="y"><b>${x.wrong}</b><span>Yanlış</span></div><div><b>${x.blank}</b><span>Boş</span></div></div>
+      </article>`;
+    }).join('') : '<div class="empty">Henüz açıklanmış bir sınav sonucu yok.</div>'}
+    <footer>Sonuçlar öğretmen formları okuttukça bu sayfada kendiliğinden güncellenir.</footer>`;
+  entry.hidden = true;
+  result.hidden = false;
+  // Canlı güncellemede okunan yer kaybolmasın
+  window.scrollTo(0, first ? 0 : y);
+  $('#again').onclick = () => { input.value = ''; backToEntry(); };
+}
+
+// Yalnızca rakam; 4. haneden sonra okunaklılık için boşluk. 8 hane tamamlanınca kendiliğinden sorgulanır.
+input.addEventListener('input', () => {
+  const digits = input.value.replace(/\D/g, '').slice(0, 8);
+  input.value = digits.length > 4 ? `${digits.slice(0, 4)} ${digits.slice(4)}` : digits;
+  if (digits.length === 8) lookup(digits);
+  else { stop(); setMsg(''); }
+});
+
+// Bu cihazda daha önce girilen kod hatırlanır
+let saved = '';
+try { saved = localStorage.getItem(LS) || ''; } catch (e) { /* yok say */ }
+if (/^\d{8}$/.test(saved)) {
+  input.value = `${saved.slice(0, 4)} ${saved.slice(4)}`;
+  lookup(saved);
+}
+</script>
+</body>
+</html>
