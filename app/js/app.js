@@ -111,8 +111,35 @@
     const name = `${cls.name} - ${e.name} - optik.pdf`.replace(/[\\/:*?"<>|]/g, '_');
     const fmt = Layout.fmtOf(e.format);
     const pages = Math.ceil(studs.length / fmt.perPage);
+    pdfReady(blob, name, `${studs.length} öğrenci · ${pages} sayfa A4 · ${fmtLabel(e.format)}${fmt.perPage > 1 ? '. Sayfaları kesik çizgilerden kesin.' : ''}`);
+  }
+
+  // Sınıftaki öğrencilerin veli kodlarını kesilip dağıtılacak kartlar olarak PDF'e döker (sayfada 16)
+  async function makeCodesPDF(classId) {
+    const cls = Store.getClass(classId);
+    const studs = Store.students(classId);
+    if (!studs.length) return toast('Bu sınıfta öğrenci yok');
+    const m = $('#modal');
+    m.innerHTML = `<div class="sheet-modal"><h3>PDF hazırlanıyor…</h3></div>`;
+    m.hidden = false;
+    m.onclick = null;
+    let blob;
+    try {
+      blob = await PDF.parentCodes(cls, studs, PARENT_SITE);
+    } catch (err) {
+      closeModal();
+      return toast('PDF oluşturulamadı: ' + err.message);
+    }
+    const name = `${cls.name} - veli kodları.pdf`.replace(/[\\/:*?"<>|]/g, '_');
+    const missing = studs.filter((s) => !s.parentCode).length;
+    pdfReady(blob, name, `${studs.length} öğrenci · ${Math.ceil(studs.length / 16)} sayfa A4 · sayfada 16 kart. Kartları kesik çizgilerden kesin.${missing ? ` ${missing} öğrencinin kodu henüz hazır değil.` : ''}`);
+  }
+
+  // PDF hazır penceresi. Paylaşma, kullanıcı dokunuşu gerektirdiği için ayrı bir düğmeyle yapılır.
+  function pdfReady(blob, name, info) {
+    const m = $('#modal');
     m.innerHTML = `<div class="sheet-modal"><h3>PDF hazır</h3>
-      <p class="muted">${studs.length} öğrenci · ${pages} sayfa A4 · ${fmtLabel(e.format)}${fmt.perPage > 1 ? '. Sayfaları kesik çizgilerden kesin.' : ''}</p>
+      <p class="muted">${info}</p>
       <p class="small muted">Yazdırırken ölçeği <b>%100 / Gerçek boyut</b> seçin. Kâğıda sığdırma da sorun yaratmaz.</p>
       <div class="btns"><button class="btn" data-close>Kapat</button><button class="btn primary" data-share>Paylaş / Kaydet</button></div></div>`;
     m.querySelector('[data-close]').onclick = closeModal;
@@ -196,6 +223,7 @@
             <span class="code-chip" title="Veli kodu"><small>Veli kodu</small>${fmtCode(s.parentCode)}</span>
             <button class="roster-edit" data-act="edit-student" data-id="${s.id}" aria-label="${esc(s.name)} düzenle">${ICON_EDIT}</button>
           </div>`).join('')}</div>
+        <button class="btn small codes-print" data-act="codes-pdf" data-id="${id}">🖨 Veli kodlarını çıktı al</button>
         <details class="add-more"><summary class="btn block">+ Öğrenci ekle</summary>${addCard}</details>
       </section>
       <button class="btn danger block" style="margin-top:36px" data-act="del-class" data-id="${id}">Sınıfı sil</button>`;
@@ -1186,6 +1214,7 @@
       case 'new-class': classForm(null); break;
       case 'edit-class': classForm(Store.getClass(id)); break;
       case 'pdf': makePDF(id); break;
+      case 'codes-pdf': makeCodesPDF(id); break;
       case 'add-students': addStudents(id); break;
       case 'edit-student': studentForm(id); break;
       case 'del-class': confirmBox('Sınıf silinsin mi?', 'Sınıftaki tüm öğrenciler, sınavlar ve sonuçlar silinecek. Bu işlem geri alınamaz.', 'Sil', () => { Store.deleteClass(id); location.hash = '#/classes'; }); break;

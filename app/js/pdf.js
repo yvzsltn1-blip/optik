@@ -69,5 +69,40 @@ const PDF = (() => {
     return build(jpegs);
   }
 
-  return { sheets };
+  // Veli kodu kartları: A4'te 2 sütun × 8 satır = 16 kart, aralarında kesik kesim çizgileri.
+  // students: [{name, number, parentCode}] → PDF Blob
+  const CARD_COLS = 2, CARD_ROWS = 8, CARD_W = 210 / CARD_COLS, CARD_H = 297 / CARD_ROWS;
+  const xesc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+  function codeCardsSVG(cls, studs, site) {
+    const out = [`<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297" font-family="Arial, Helvetica, sans-serif"><rect width="210" height="297" fill="#fff"/>`];
+    studs.forEach((s, i) => {
+      const x = (i % CARD_COLS) * CARD_W + 9, y = Math.floor(i / CARD_COLS) * CARD_H;
+      const code = s.parentCode ? `${s.parentCode.slice(0, 4)} ${s.parentCode.slice(4)}` : '–';
+      out.push(`<g transform="translate(${x} ${y})">
+        <text x="0" y="8" font-size="2.6" fill="#666">${xesc(cut(cls.name, 30))}${s.number ? ' · No ' + xesc(s.number) : ''}</text>
+        <text x="0" y="14.2" font-size="4.3" font-weight="bold" fill="#111">${xesc(cut(s.name, 34))}</text>
+        <text x="0" y="20.6" font-size="2.6" fill="#666">Veli kodu</text>
+        <text x="0" y="28" font-size="7" font-weight="bold" letter-spacing="0.6" fill="#111">${code}</text>
+        <text x="0" y="33.2" font-size="2.4" fill="#555">${xesc(site)} adresine bu kodu yazarak sınav sonuçlarını görebilirsiniz.</text>
+      </g>`);
+    });
+    const dash = 'stroke="#999" stroke-width="0.2" stroke-dasharray="2 1.5"';
+    for (let c = 1; c < CARD_COLS; c++) out.push(`<line x1="${c * CARD_W}" x2="${c * CARD_W}" y1="0" y2="297" ${dash}/>`);
+    for (let r = 1; r < CARD_ROWS; r++) out.push(`<line x1="0" x2="210" y1="${r * CARD_H}" y2="${r * CARD_H}" ${dash}/>`);
+    out.push('</svg>');
+    return out.join('');
+  }
+
+  async function parentCodes(cls, students, site) {
+    const canvas = document.createElement('canvas');
+    canvas.width = PX_W;
+    canvas.height = PX_H;
+    const per = CARD_COLS * CARD_ROWS, jpegs = [];
+    for (let i = 0; i < students.length; i += per) jpegs.push(await pageJPEG(codeCardsSVG(cls, students.slice(i, i + per), site), canvas));
+    return build(jpegs);
+  }
+
+  return { sheets, parentCodes };
 })();
