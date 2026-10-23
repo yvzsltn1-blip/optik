@@ -114,7 +114,7 @@ const Scanner = (() => {
 
   function updateCount() {
     if (!state || state.mode === 'key') { el.count.textContent = ''; return; }
-    const total = Store.students(state.exam.classId).length;
+    const total = Store.roster(state.exam).length;
     el.count.textContent = `Okutulan: ${Store.results(state.exam.id).length} / ${total}`;
   }
 
@@ -281,7 +281,7 @@ const Scanner = (() => {
   // Okunamayan form için: okutulmamış öğrenci seçilir, cevaplar sonuç sayfasında elle girilir
   function manualPick() {
     const done = new Set(Store.results(state.exam.id).map((r) => r.studentId));
-    const list = Store.students(state.exam.classId).filter((s) => !done.has(s.id));
+    const list = Store.roster(state.exam).filter((s) => !done.has(s.id));
     state.frozen = true;
     el.video.pause();
     clearOverlay();

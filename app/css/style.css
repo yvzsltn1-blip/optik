@@ -246,6 +246,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; font-varian
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { display: inline-flex; gap: 6px; align-items: center; padding: 6px 10px; border-radius: 99px; background: var(--bg); color: var(--text); font-size: 13px; }
 .chip b { color: var(--bad); }
+.absent-chip { padding: 0 0 0 10px; overflow: hidden; }
+.absent-chip > a, .absent-chip > span { color: inherit; padding: 6px 0; }
+.absent-chip button { border: 0; border-left: 1px solid var(--line); background: none; color: var(--muted); font: inherit; font-size: 12px; padding: 6px 10px; cursor: pointer; }
 .optbar { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 14px; }
 .optbar > b { width: 22px; text-align: center; }
 .optbar > b.right { color: var(--ok); }

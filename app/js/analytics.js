@@ -2,14 +2,17 @@
 const Analytics = (() => {
   const mean = values => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
   const rounded = n => Math.round(n * 10) / 10;
-  function summarize(classId = null, examId = null) {
-    const exams = Store.exams(classId).filter(e => examId == null || e.id === examId);
-    const classes = Store.classes().filter(c => classId == null || c.id === classId);
+  // classIds / examIds: tek kimlik ya da kimlik dizisi (ör. 5A, 5B, 5C'nin ortak sınavı); null = hepsi.
+  const idSet = v => v == null ? null : new Set([].concat(v));
+  function summarize(classIds = null, examIds = null) {
+    const classSet = idSet(classIds), examSet = idSet(examIds);
+    const exams = Store.exams().filter(e => (!classSet || classSet.has(e.classId)) && (!examSet || examSet.has(e.id)));
+    const classes = Store.classes().filter(c => !classSet || classSet.has(c.id));
     const entries = [], questions = [], topics = [], summaries = [];
     let read = 0, expected = 0, excluded = 0;
     const excludedReasons = { booklet: 0, key: 0, uncertain: 0 };
     for (const exam of exams) {
-      const roster = Store.students(exam.classId);
+      const roster = Store.roster(exam); // sınava girmeyecek öğrenciler hesaba katılmaz
       const studentIds = new Set(roster.map(s => s.id));
       const results = Store.results(exam.id).filter(r => studentIds.has(r.studentId));
       const rows = [], questionMap = new Map(), topicMap = new Map();
@@ -50,7 +53,7 @@ const Analytics = (() => {
       const student = studentMap.get(row.student.id);
       student.values.push(row.value); student.count++;
     }
-    const ranking = [...studentMap.values()].map(s => ({ ...s, average: mean(s.values), expected: exams.filter(e => e.classId === s.student.classId).length }))
+    const ranking = [...studentMap.values()].map(s => ({ ...s, average: mean(s.values), expected: exams.filter(e => e.classId === s.student.classId && !Store.isAbsent(e, s.student.id)).length }))
       .sort((a, b) => rounded(b.average) - rounded(a.average) || a.student.name.localeCompare(b.student.name, 'tr'));
     ranking.forEach((row, i) => { row.rank = i && rounded(row.average) === rounded(ranking[i - 1].average) ? ranking[i - 1].rank : i + 1; });
     const classRows = classes.map(cls => {

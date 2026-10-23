@@ -50,6 +50,8 @@ py -m http.server 8766        # proje kök klasöründe
 - Okuyucu (`app/js/omr.js`), kamera ekranında `app/js/omr-worker.js` içinde ayrı iş parçacığında çalışır. Köşeler yarım çözünürlükte aranır, tam çözünürlükte düzeltilir; her soru satırı basılı çerçevelere göre ince ayarlanır (kâğıt kıvrımı). Kamera ekranı birkaç karenin ortalamasından karar verir; eşiğe yakın işaretler "şüpheli" olarak kaydedilir ve otomatik kayıt o formda durur.
 - Puanlama: sınavda `scoring: 'puan'` ise 100 üzerinden puan (`exam.points` ile soru ağırlıkları); `exam.topics` = konu aralıkları.
 - Sınav analizi: özet (ortalama, medyan, std. sapma), en çok yanlış yapılan sorular ve en çok seçilen yanlış şık, zorluk dağılımı, ayırt edicilik (üst/alt %27), soru ayrıntısında kimin ne işaretlediği, öğrenci × soru haritası.
+- Sınava girmeyecek öğrenci: sınav sayfasındaki "Okutulmayanlar" listesinde "Girmeyecek" ile ayrılır (`exam.absent`). Okunan sayısına, okuma oranına ve ortalamaya katılmaz; formu okutulursa işaret kendiliğinden kalkar. Kopyalanan sınava taşınmaz.
+- İstatistiklerde sınıf düzeyi: aynı rakamla başlayan en az iki sınıf varsa (5A, 5B, 5C) "Tüm 5. sınıflar" seçilebilir. Bu düzeyde aynı adı taşıyan sınavlar "Ortak sınavlar" altında tek seçenek olur; seçilince tüm formlar birlikte ortalanır, "Sınıflara bakış" her sınıfın kendi ortalamasını gösterir.
 - Veli karnesi: `app/js/report.js` tuvalde JPG karne çizer; telefonda paylaşım menüsüyle ya da panoya kopyalanıp WhatsApp sohbetiyle gönderilir.
 - Form geometrisi `app/js/layout.js` dosyasında. Burada yapılacak bir değişiklik, basılmış tüm formları geçersiz kılar.
 - Her öğrencinin formunda, öğrenciyi tanıtan bir kod şeridi (16 bit + kontrol biti) bulunur. Okutma sırasında öğrenci bu şeritten otomatik olarak tanınır.

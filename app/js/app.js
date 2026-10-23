@@ -333,7 +333,7 @@
   // Sınıf sayfasındaki sınav kartı: tarih rozeti, okunma ilerlemesi, ortalama
   function examTile(e) {
     const res = Store.results(e.id);
-    const total = Store.students(e.classId).length;
+    const total = Store.roster(e).length;
     const keyed = !Store.keyEmpty(e);
     const avg = res.length ? res.reduce((s, r) => s + Store.mainScore(e, Store.scoreResult(e, r)), 0) / res.length : null;
     const d = e.date ? new Date(e.date + 'T00:00') : null;
@@ -418,7 +418,7 @@
     const c = Store.getClass(e.classId);
     const res = Store.results(e.id);
     const keyed = !Store.keyEmpty(e);
-    const total = Store.students(e.classId).length;
+    const total = Store.roster(e).length;
     const percent = total ? Math.min(100, Math.round(res.length / total * 100)) : 0;
     const status = !keyed ? 'Anahtar eksik' : !res.length ? 'Okumaya hazır' : res.length >= total ? 'Tamamlandı' : 'Okuma sürüyor';
     return `<a class="exam-card" style="${classColor(e.classId)}" href="#/exam/${e.id}">
@@ -516,7 +516,7 @@
     (fd) => {
       const ids = fd.getAll('cls').map(Number);
       if (!ids.length) { toast('En az bir sınıf seçin'); return false; }
-      const { id: _, classId: __, ...fields } = JSON.parse(JSON.stringify(e));
+      const { id: _, classId: __, absent: ___, ...fields } = JSON.parse(JSON.stringify(e));
       const copies = ids.map((classId) => Store.saveExam({ ...JSON.parse(JSON.stringify(fields)), classId }));
       for (const p of Store.examPapers(e.id)) Store.savePaper({ id: p.id, examIds: [...p.examIds, ...copies.map((x) => x.id)] });
       toast(`${ids.map((c) => Store.getClass(c).name).join(', ')} için sınav oluşturuldu`);
@@ -543,7 +543,8 @@
     const st = examStats(e);
     const all = Store.students(e.classId);
     const done = new Set(st.rows.map((x) => x.st.id));
-    const missing = all.filter((s) => !done.has(s.id));
+    const missing = all.filter((s) => !done.has(s.id) && !Store.isAbsent(e, s.id));
+    const absent = all.filter((s) => !done.has(s.id) && Store.isAbsent(e, s.id));
     const lbl = Store.mainLabel(e);
     const toCheck = st.rows.filter((x) => x.r.uncertain?.length);
     return `
@@ -560,7 +561,7 @@
 
       <h2>Özet</h2>
       <div class="stats">
-        <div class="stat"><b>${st.rows.length}<small class="muted" style="font-size:13px">/${all.length}</small></b><span>Okunan</span></div>
+        <div class="stat"><b>${st.rows.length}<small class="muted" style="font-size:13px">/${all.length - absent.length}</small></b><span>Okunan</span></div>
         <div class="stat"><b>${fmt(st.avg)}</b><span>Ort. ${lbl.toLocaleLowerCase('tr-TR')}</span></div>
         <div class="stat"><b>${fmt(st.max)}</b><span>En yüksek</span></div>
         <div class="stat"><b>${fmt(st.min)}</b><span>En düşük</span></div>
@@ -573,8 +574,10 @@
       <div class="card">${st.rows.length ? `<table class="tbl"><thead><tr><th>#</th><th class="l">Öğrenci</th><th>D</th><th>Y</th><th>B</th><th>Net</th><th>${Store.usesPoints(e) ? 'Puan' : '%'}</th></tr></thead><tbody>
         ${st.rows.map((x, i) => `<tr data-go="#/result/${id}/${x.st.id}"><td class="muted">${i + 1}</td><td class="l">${x.r.uncertain?.length ? '<span title="Kontrol edilecek soru var" style="color:var(--warn)">⚠</span> ' : ''}${x.r.manual ? '<span title="Elle girildi">✍️</span> ' : ''}${esc(x.st.name)}</td><td style="color:var(--ok)">${x.s.correct}</td><td style="color:var(--bad)">${x.s.wrong}</td><td class="muted">${x.s.blank}</td><td>${Store.usesPoints(e) ? fmt(x.s.net) : `<b>${fmt(x.s.net)}</b>`}</td><td class="${Store.usesPoints(e) ? '' : 'muted'}">${Store.usesPoints(e) ? `<b>${fmt(x.s.points, 1)}</b>` : fmt(x.s.pct, 1)}</td></tr>`).join('')}
         </tbody></table>` : '<div class="empty">Henüz okutulan optik yok</div>'}</div>
-      ${missing.length ? `<h2>Okutulmayanlar (${missing.length})</h2><div class="card pad small"><p class="muted" style="margin:0 0 8px">Formu okunamayan öğrencinin cevaplarını elle girmek için adına dokunun.</p>
-        <div class="chips">${missing.map((s) => `<a class="chip" href="#/result/${id}/${s.id}">✍️ ${esc(s.name)}</a>`).join('')}</div></div>` : ''}
+      ${missing.length ? `<h2>Okutulmayanlar (${missing.length})</h2><div class="card pad small"><p class="muted" style="margin:0 0 8px">Formu okunamayan öğrencinin cevaplarını elle girmek için adına dokunun. Sınava hiç girmeyecek öğrenciyi “Girmeyecek” ile ayırın; ortalamaya katılmaz, bu listede beklemez.</p>
+        <div class="chips">${missing.map((s) => `<span class="chip absent-chip"><a href="#/result/${id}/${s.id}">✍️ ${esc(s.name)}</a><button data-act="absent" data-id="${id}" data-s="${s.id}" data-on="1">Girmeyecek</button></span>`).join('')}</div></div>` : ''}
+      ${absent.length ? `<h2>Sınava girmeyecekler (${absent.length})</h2><div class="card pad small"><p class="muted" style="margin:0 0 8px">Ortalamaya ve okuma oranına katılmazlar. Formu okutulursa bu listeden kendiliğinden çıkar.</p>
+        <div class="chips">${absent.map((s) => `<span class="chip absent-chip"><span>${esc(s.name)}</span><button data-act="absent" data-id="${id}" data-s="${s.id}">↩ Geri al</button></span>`).join('')}</div></div>` : ''}
       <button class="btn danger block" style="margin-top:28px" data-act="del-exam" data-id="${id}">Sınavı sil</button>`;
   }
 
@@ -1017,7 +1020,7 @@
         <div><span class="eyebrow">Sınıf ortalaması</span><div class="hero-value">${fmt(st.avg, 1)}<small>${lbl}</small></div><p class="hero-caption">En yüksek ${fmt(st.max, 1)} <span aria-hidden="true">/</span> En düşük ${fmt(st.min, 1)}</p></div>
         <div class="hero-aside"><b>%${Math.round(success)}</b><span>Başarı oranı</span><div class="hero-meter"><i style="width:${Math.max(0, Math.min(100, success))}%"></i></div></div>
       </section>
-      <div class="analysis-metrics"><div><span>Katılım</span><b>${n}<span style="display:inline;font-size:12px;font-weight:400"> / ${Store.students(e.classId).length}</span></b></div><div><span>Medyan ${lbl}</span><b>${fmt(median, 1)}</b></div><div><span>Standart sapma</span><b>${fmt(sd, 1)}</b></div></div>
+      <div class="analysis-metrics"><div><span>Katılım</span><b>${n}<span style="display:inline;font-size:12px;font-weight:400"> / ${Store.roster(e).length}</span></b></div><div><span>Medyan ${lbl}</span><b>${fmt(median, 1)}</b></div><div><span>Standart sapma</span><b>${fmt(sd, 1)}</b></div></div>
       <div class="analytics-grid">
         <section class="card pad"><div class="section-head"><div><h2>${pts ? 'Puan' : 'Net'} dağılımı</h2><p>Sınıfın genel performans görünümü</p></div><span class="section-index">01</span></div>
           <div class="hist" role="img" aria-label="${esc(hist.map((v, i) => `%${i * 10}–${i * 10 + 10}: ${v} öğrenci`).join('; '))}">${hist.map((v, i) => `<div class="${v && v === hmax ? 'peak' : ''}" title="%${i * 10}–${i * 10 + 10}: ${v} öğrenci"><div class="hist-column"><b>${v || ''}</b><i style="height:${hmax ? v / hmax * 106 : 0}px"></i></div><small>${i * 10}</small></div>`).join('')}</div>
@@ -1227,19 +1230,49 @@
   }
 
   // ---------- Genel istatistikler ----------
+  // analyticsClass: '' | sınıf kimliği | 'g5' (tüm 5. sınıflar)
+  // analyticsExam: '' | sınav kimliği | 'n:5|a' (aynı düzeydeki sınıfların aynı adlı sınavları)
   let analyticsClass = '', analyticsExam = '';
+  const gradeOfClass = (c) => c?.name.match(/^\s*(\d+)/)?.[1] || '';
   function analyticsView() {
     setTop('İstatistikler', null);
-    if (analyticsClass && !Store.getClass(+analyticsClass)) analyticsClass = '';
-    const available = Store.exams(analyticsClass ? +analyticsClass : null);
-    if (analyticsExam && !available.some(e => e.id === +analyticsExam)) analyticsExam = '';
-    const data = Analytics.summarize(analyticsClass ? +analyticsClass : null, analyticsExam ? +analyticsExam : null);
+    const grades = new Map();
+    for (const c of Store.classes()) {
+      const g = gradeOfClass(c);
+      if (g) grades.set(g, [...(grades.get(g) || []), c]);
+    }
+    for (const [g, list] of grades) if (list.length < 2) grades.delete(g);
+    const gradeSel = analyticsClass.startsWith('g') ? analyticsClass.slice(1) : '';
+    if (gradeSel ? !grades.has(gradeSel) : analyticsClass && !Store.getClass(+analyticsClass)) analyticsClass = '';
+    const classIds = !analyticsClass ? null : gradeSel ? grades.get(gradeSel).map(c => c.id) : [+analyticsClass];
+    const available = Store.exams().filter(e => !classIds || classIds.includes(e.classId));
+    // Ortak sınav: aynı sınıf düzeyinde, aynı adı taşıyan ve en az iki sınıfta yapılmış sınavlar
+    const common = new Map();
+    if (!classIds || gradeSel) for (const e of available) {
+      const g = gradeOfClass(Store.getClass(e.classId));
+      if (!g) continue;
+      const key = `n:${g}|${e.name.trim().toLocaleLowerCase('tr-TR')}`;
+      if (!common.has(key)) common.set(key, { key, name: e.name.trim(), exams: [] });
+      common.get(key).exams.push(e);
+    }
+    for (const [key, group] of common) if (new Set(group.exams.map(e => e.classId)).size < 2) common.delete(key);
+    const commonSel = common.get(analyticsExam);
+    if (analyticsExam && !commonSel && !available.some(e => e.id === +analyticsExam)) analyticsExam = '';
+    const examIds = commonSel ? commonSel.exams.map(e => e.id) : analyticsExam ? [+analyticsExam] : null;
+    const data = Analytics.summarize(classIds, examIds);
     const score = n => n == null ? '—' : fmt(n, 1);
     const className = id => esc(Store.getClass(id)?.name || '');
+    const classNames = exams => Store.classes().filter(c => exams.some(e => e.classId === c.id)).map(c => esc(c.name)).join(', ');
     const head = (title, note = '') => `<div class="insight-heading"><h2>${title}</h2>${note ? `<span>${note}</span>` : ''}</div>`;
+    const classOption = c => `<option value="${c.id}" ${analyticsClass === String(c.id) ? 'selected' : ''}>${esc(c.name)}</option>`;
+    const examOption = e => `<option value="${e.id}" ${analyticsExam === String(e.id) ? 'selected' : ''}>${className(e.classId)} · ${esc(e.name)}</option>`;
     const intro = `<div class="exam-editorial"><div><span class="eyebrow">ÖĞRENMEYE GENEL BAKIŞ</span><h2>Veriden içgörüye<span>.</span></h2><p>Sınıfınızın güçlü yanlarını ve ihtiyaçlarını keşfedin.</p></div></div>
-      <div class="analytics-filters"><label><span>Sınıf</span><select id="analytics-class"><option value="">Tüm sınıflar</option>${Store.classes().map(c => `<option value="${c.id}" ${analyticsClass === String(c.id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
-      <label><span>Sınav</span><select id="analytics-exam"><option value="">Tüm sınavlar</option>${available.map(e => `<option value="${e.id}" ${analyticsExam === String(e.id) ? 'selected' : ''}>${className(e.classId)} · ${esc(e.name)}</option>`).join('')}</select></label></div>`;
+      <div class="analytics-filters"><label><span>Sınıf</span><select id="analytics-class"><option value="">Tüm sınıflar</option>${grades.size
+        ? `<optgroup label="Sınıf düzeyi">${[...grades].map(([g, list]) => `<option value="g${g}" ${gradeSel === g ? 'selected' : ''}>Tüm ${g}. sınıflar (${list.map(c => esc(c.name)).join(', ')})</option>`).join('')}</optgroup><optgroup label="Sınıflar">${Store.classes().map(classOption).join('')}</optgroup>`
+        : Store.classes().map(classOption).join('')}</select></label>
+      <label><span>Sınav</span><select id="analytics-exam"><option value="">Tüm sınavlar</option>${common.size
+        ? `<optgroup label="Ortak sınavlar (sınıflar birlikte)">${[...common.values()].map(g => `<option value="${esc(g.key)}" ${analyticsExam === g.key ? 'selected' : ''}>${esc(g.name)} · ${classNames(g.exams)}</option>`).join('')}</optgroup><optgroup label="Sınıf sınavları">${available.map(examOption).join('')}</optgroup>`
+        : available.map(examOption).join('')}</select></label></div>`;
     const exclusion = data.excluded ? `<div class="analytics-note">${data.excluded} form analize alınmadı: ${[
       data.excludedReasons.key ? `${data.excludedReasons.key} cevap anahtarı eksik` : '',
       data.excludedReasons.booklet ? `${data.excludedReasons.booklet} kitapçığı belirsiz` : '',
@@ -1252,7 +1285,7 @@
     const distMax = Math.max(...data.distribution, 1);
     const rankRow = row => `<a class="ranking-row" href="#/student/${row.student.id}"><span class="rank-position ${row.rank <= 3 ? 'rank-top' : ''}">${row.rank.toString().padStart(2, '0')}</span><span class="ranking-person"><b>${esc(row.student.name)}</b><small>${className(row.student.classId)} · ${row.count}/${row.expected} sınav değerlendirildi</small></span><strong>${score(row.average)}<small>/100</small></strong></a>`;
     return `${intro}${exclusion}
-      <section class="analytics-hero"><div><span class="eyebrow">${analyticsClass ? 'SINIF ORTALAMASI' : 'GENEL ORTALAMA'}</span><div class="analytics-value">${score(data.average)}<span>/100</span></div><p>${data.entries.length} değerlendirilmiş form · ${data.summaries.filter(s => s.count).length} sınav</p></div><div class="analytics-hero-detail"><span>Ortanca değer<strong>${score(data.median)}</strong></span><span>Okuma oranı<strong>%${Math.round(data.read / Math.max(1, data.expected) * 100)}</strong></span></div></section>
+      <section class="analytics-hero"><div><span class="eyebrow">${commonSel ? `${esc(commonSel.name.toLocaleUpperCase('tr-TR'))} · ORTAK ORTALAMA` : gradeSel ? `${gradeSel}. SINIFLAR ORTALAMASI` : analyticsClass ? 'SINIF ORTALAMASI' : 'GENEL ORTALAMA'}</span><div class="analytics-value">${score(data.average)}<span>/100</span></div><p>${data.entries.length} değerlendirilmiş form · ${data.summaries.filter(s => s.count).length} sınav</p></div><div class="analytics-hero-detail"><span>Ortanca değer<strong>${score(data.median)}</strong></span><span>Okuma oranı<strong>%${Math.round(data.read / Math.max(1, data.expected) * 100)}</strong></span></div></section>
       <div class="analytics-kpis"><div><span>Öğrenci</span><b>${data.ranking.length}</b><small>sonucu değerlendirilen</small></div><div><span>Okunan form</span><b>${data.read}<small> / ${data.expected}</small></b><small>seçili sınavlarda</small></div><div><span>Doğru yanıt</span><b>%${Math.round(data.correct / totalAnswers * 100)}</b><small>${totalAnswers} yanıt üzerinden</small></div></div>
       <div class="insight-layout"><section class="insight-panel trend-panel">${head('Sınav ortalamaları', '100 üzerinden')}
         ${timeline.length > 1 ? `<div class="trend-summary"><strong>${trend >= 0 ? '+' : ''}${score(trend)}</strong><span>son iki sınav arasındaki fark</span></div>` : '<p class="insight-caption">Yeni sonuçlar eklendikçe sınavları karşılaştırabilirsiniz.</p>'}
@@ -1261,12 +1294,12 @@
         <p class="insight-caption">Son ${timeline.length} sınav, tarih sırasıyla. Farklı sınav ve katılımcılar sonuçları etkileyebilir.</p></section>
       <section class="insight-panel">${head('Başarı dağılımı', `${data.entries.length} form`)}<div class="distribution">${data.distribution.map((n, i) => `<div><span>${['0–19', '20–39', '40–59', '60–79', '80–100'][i]}</span><i><b style="width:${n / distMax * 100}%"></b></i><strong>${n}</strong></div>`).join('')}</div>
         <div class="answer-breakdown">${[['Doğru', data.correct, 'ok'], ['Yanlış', data.wrong, 'bad'], ['Boş', data.blank, 'muted']].map(([label, n, color]) => `<div><i style="background:var(--${color})"></i><span>${label}</span><b>${n}</b><small>%${Math.round(n / totalAnswers * 100)}</small></div>`).join('')}</div></section></div>
-      ${!analyticsClass ? `<section class="insight-panel">${head('Sınıflara bakış', 'Form ortalamaları')}<div class="class-comparison">${data.classes.map(c => `<button data-analytics-class="${c.cls.id}" style="${classColor(c.cls.id)}"><span class="class-badge">${esc(c.cls.name)}</span><span class="comparison-meter"><i style="width:${c.average || 0}%"></i></span><span><b>${score(c.average)}</b><small>${c.count} form</small></span></button>`).join('')}</div></section>` : ''}
+      ${!analyticsClass || gradeSel ? `<section class="insight-panel">${head('Sınıflara bakış', commonSel ? esc(commonSel.name) : 'Form ortalamaları')}<div class="class-comparison">${data.classes.filter(c => !examIds || data.exams.some(e => e.classId === c.cls.id)).map(c => `<button data-analytics-class="${c.cls.id}" data-analytics-exam="${commonSel?.exams.find(e => e.classId === c.cls.id)?.id || ''}" style="${classColor(c.cls.id)}"><span class="class-badge">${esc(c.cls.name)}</span><span class="comparison-meter"><i style="width:${c.average || 0}%"></i></span><span><b>${score(c.average)}</b><small>${c.count} form</small></span></button>`).join('')}</div></section>` : ''}
       <section class="insight-panel">${head('En çok yanlış yapılan sorular', 'Yanlış oranına göre')}
         ${data.questions.length ? `<div class="difficult-questions">${data.questions.slice(0, 8).map(q => `<a class="difficult-question" href="#/exam/${q.exam.id}/stats/${q.booklet}"><span class="question-number">${q.q + 1}<small>SORU</small></span><span class="question-context"><b>${esc(q.exam.name)}</b><small>${className(q.exam.classId)}${Store.bookletCount(q.exam) > 1 ? ` · ${L[q.booklet]} kitapçığı` : ''} · ${q.wrong}/${q.total} yanlış · ${q.blank} boş</small><span class="question-error-bar"><i style="width:${q.wrong / q.total * 100}%"></i></span></span><strong>%${Math.round(q.wrong / q.total * 100)}</strong></a>`).join('')}</div><p class="insight-caption">Her soru kendi sınavı ve kitapçığı içinde değerlendirilir. Sınav analizini açmak için dokunun.</p>` : '<p class="insight-caption">Değerlendirilen formlarda yanlış yanıt bulunmuyor.</p>'}</section>
       <section class="insight-panel">${head('Öğrenci sıralaması', `${data.ranking.length} öğrenci`)}<p class="insight-caption">Öğrencinin değerlendirilen sınavlarının ortalaması. Katılım sayıları farklı olabilir; eşit ortalamalar aynı sırayı paylaşır.</p><div class="ranking-list">${data.ranking.slice(0, 10).map(rankRow).join('')}</div>${data.ranking.length > 10 ? `<details class="ranking-more"><summary>Tüm öğrencileri göster (${data.ranking.length})</summary><div class="ranking-list">${data.ranking.slice(10).map(rankRow).join('')}</div></details>` : ''}</section>
       <section class="insight-panel">${head('Konu & kazanım analizi', 'En çok desteğe ihtiyaç duyulan')}${data.topics.length ? data.topics.slice(0, 8).map(t => `<a class="topic-insight" href="#/exam/${t.exam.id}/stats"><div><b>${esc(t.name)}</b><small>${className(t.exam.classId)} · ${esc(t.exam.name)} · ${t.students} form</small><span class="comparison-meter"><i style="width:${t.correct / t.total * 100}%"></i></span></div><strong>%${Math.round(t.correct / t.total * 100)}</strong></a>`).join('') : '<p class="insight-caption">Sınav ayarlarında konu ve soru aralıklarını tanımladığınızda kazanım başarıları burada görünür.</p>'}<p class="insight-caption">Konu eşleştirmesi A kitapçığına göre yapılır.</p></section>
-      <details class="analytics-method"><summary>Bu değerler nasıl hesaplanıyor?</summary><p>Puanlı sınavlarda ağırlıklı puan; netli sınavlarda netin geçerli soru sayısına oranı kullanılır. Sonuçlar 0–100 aralığındadır ve yanlış götürme ayarı uygulanır. Genel ve sınıf ortalaması değerlendirilen formların eşit ağırlıklı ortalamasıdır; öğrenci sıralaması her öğrencinin sınav ortalamasına göre yapılır. Anahtarı boş sorular iptal kabul edilir. Katılınmayan sınavlar sıfır sayılmaz. Kitapçığı belirsiz, okuması kontrol bekleyen veya değerlendirilebilir anahtarı olmayan formlar analize alınmaz. Okuma oranı bu formları da kapsar.</p></details>`;
+      <details class="analytics-method"><summary>Bu değerler nasıl hesaplanıyor?</summary><p>Puanlı sınavlarda ağırlıklı puan; netli sınavlarda netin geçerli soru sayısına oranı kullanılır. Sonuçlar 0–100 aralığındadır ve yanlış götürme ayarı uygulanır. Genel ve sınıf ortalaması değerlendirilen formların eşit ağırlıklı ortalamasıdır; öğrenci sıralaması her öğrencinin sınav ortalamasına göre yapılır. Anahtarı boş sorular iptal kabul edilir. Katılınmayan sınavlar sıfır sayılmaz; sınav sayfasında “Girmeyecek” olarak ayrılan öğrenciler okuma oranına da katılmaz. Ortak sınav seçildiğinde aynı sınıf düzeyindeki aynı adlı sınavların tüm formları birlikte ortalanır. Kitapçığı belirsiz, okuması kontrol bekleyen veya değerlendirilebilir anahtarı olmayan formlar analize alınmaz. Okuma oranı bu formları da kapsar.</p></details>`;
   }
 
   // ---------- Yönlendirme ----------
@@ -1305,7 +1338,7 @@
 
   view.addEventListener('click', (ev) => {
     const analyticsFilter = ev.target.closest('[data-analytics-class]');
-    if (analyticsFilter) { analyticsClass = analyticsFilter.dataset.analyticsClass; analyticsExam = ''; render(true); return; }
+    if (analyticsFilter) { analyticsClass = analyticsFilter.dataset.analyticsClass; analyticsExam = analyticsFilter.dataset.analyticsExam || ''; render(true); return; }
     const filter = ev.target.closest('[data-exam-class]');
     if (filter) { examClassFilter = filter.dataset.examClass; updateExamResults(); return; }
     if (ev.target.closest('[data-reset-exams]')) {
@@ -1344,6 +1377,7 @@
       case 'new-exam': examForm(null, d.class ? +d.class : null); break;
       case 'edit-exam': examForm(Store.getExam(id)); break;
       case 'copy-exam': copyExamForm(id); break;
+      case 'absent': Store.setAbsent(id, +d.s, !!d.on); render(true); break;
       case 'del-exam': confirmBox('Sınav silinsin mi?', 'Bu sınavın tüm sonuçları silinecek.', 'Sil', () => { Store.deleteExam(id); location.hash = '#/exams'; }); break;
       case 'scan': {
         const e = Store.getExam(id);

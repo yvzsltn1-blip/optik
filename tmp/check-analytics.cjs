@@ -1,4 +1,4 @@
-﻿const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const ctx={console,localStorage:{getItem(){return null},setItem(){}},crypto:require('crypto').webcrypto};
 vm.createContext(ctx);
 for (const f of ['store','analytics']) vm.runInContext(fs.readFileSync(`app/js/${f}.js`,'utf8'),ctx);
@@ -29,5 +29,15 @@ run('Store.saveExam({...e1,key:[null,null]})');assert.equal(run('Analytics.summa
 run('Store.saveExam({...eb,scoring:"puan",points:[3,1],penalty:4});Store.saveResult(eb.id,s3.id,[1,0],1)');
 assert.equal(run('Analytics.summarize(b.id)').average,68.8);
 run('Store.deleteResult(eb.id,s3.id)');assert.equal(run('Analytics.summarize(b.id)').average,null);
-console.log('PASS: normalization, exclusions, class/exam filters, cancelled questions, booklet keys, weighted score and penalty, ranking ties, empty states, live result edits.');
+// Ortak sınav: 5A ve 5B'nin aynı adlı sınavı birlikte ortalanır
+run('Store.saveExam({...e1,key:[0,0]});Store.clearUncertain(e1.id,s1.id)');
+run('globalThis.ec=Store.saveExam({classId:b.id,name:"Short",date:"2026-10-01",questionCount:2,optionCount:4,key:[0,0]});Store.saveResult(ec.id,s3.id,[1,1])');
+d=run('Analytics.summarize([a.id,b.id],[e1.id,ec.id])');assert.equal(d.entries.length,3);assert.equal(Math.round(d.average*10)/10,66.7);assert.equal(d.classes.length,2);
+// Sınava girmeyecek öğrenci beklenen sayıdan düşülür; okutulunca işaret kalkar
+const s4=run('globalThis.s4=Store.addStudent(a.id,"Deniz","4")');
+assert.equal(run('Analytics.summarize(a.id,e1.id)').expected,3);
+run('Store.setAbsent(e1.id,s4.id,true)');d=run('Analytics.summarize(a.id,e1.id)');assert.equal(d.expected,2);assert.equal(d.read,2);
+assert.equal(run('Store.roster(e1).length'),2);
+run('Store.saveResult(e1.id,s4.id,[0,0])');assert.equal(run('Store.isAbsent(e1,s4.id)'),false);
+console.log('PASS: normalization, exclusions, class/exam filters, cancelled questions, booklet keys, weighted score and penalty, ranking ties, empty states, live result edits, common exams, absent students.');
 

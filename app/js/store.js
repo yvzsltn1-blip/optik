@@ -143,6 +143,17 @@ const Store = (() => {
     unlinkExams(new Set([id]));
     save();
   }
+  // Sınava hiç girmeyecek öğrenciler (exam.absent): okutulmayanlarda görünmez, ortalamaya ve
+  // okuma oranına katılmaz. Öğrencinin sonucu okutulursa işaret kendiliğinden kalkar.
+  const isAbsent = (exam, studentId) => !!exam?.absent?.includes(studentId);
+  const roster = (exam) => students(exam.classId).filter((s) => !isAbsent(exam, s.id));
+  function setAbsent(examId, studentId, on) {
+    const e = getExam(examId);
+    if (!e || isAbsent(e, studentId) === on) return;
+    e.absent = on ? [...(e.absent || []), studentId] : e.absent.filter((x) => x !== studentId);
+    save();
+    emit('put', 'exams', e);
+  }
 
   // --- Sınav kâğıtları (soru dosyaları) ---
   // Bir kâğıt birden çok sınava bağlanabilir (ör. 5A, 5B, 5C'nin ortak yazılısı); dosyalar bir kez
@@ -193,6 +204,7 @@ const Store = (() => {
     delete r.sentVia;
     save();
     emit('put', 'results', r);
+    setAbsent(examId, studentId, false);
     return r;
   }
   // Öğretmen kontrol ettiğinde şüpheli işaretini kaldırır (q verilmezse hepsini)
@@ -357,7 +369,7 @@ const Store = (() => {
     KINDS, classes, classIndex, getClass, saveClass, deleteClass, reorderClasses,
     students, getStudent, addStudent, updateStudent, deleteStudent, newParentCode, parentExams,
     allStudents: () => db.students,
-    exams, getExam, saveExam, deleteExam,
+    exams, getExam, saveExam, deleteExam, isAbsent, roster, setAbsent,
     papers, getPaper, examPapers, newPaperId, savePaper, deletePaper,
     results, studentResults, getResult, saveResult, deleteResult, markSent,
     score, scoreResult, mainScore, mainLabel, usesPoints, examTopics, topicScores, clearUncertain, bookletCount, bookletOf, keyFor, setKey, keyEmpty, setBooklet, exportJSON, importJSON,
