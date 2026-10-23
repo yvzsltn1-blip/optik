@@ -241,6 +241,7 @@ const Scanner = (() => {
     const sc = Store.scoreResult(exam, { answers, booklet });
     state.pending = { student, answers, booklet, uncertain };
     const main = Store.mainScore(exam, sc);
+    const grid = answerGrid(exam, answers, Store.bookletOf(exam, { booklet }), sc.per, uncertain);
     const nums = `<div class="nums"><div><b style="color:var(--ok)">${sc.correct}</b><span>Doğru</span></div><div><b style="color:var(--bad)">${sc.wrong}</b><span>Yanlış</span></div><div><b>${sc.blank}</b><span>Boş</span></div><div><b>${fmt(main)}</b><span>${Store.mainLabel(exam)}</span></div></div>`;
     const multi = answers.filter((a) => a === -1).length;
     const bkLabel = nb < 2 ? '' : booklet >= 0 && booklet != null ? `<span class="pill ok">${Layout.LETTERS[booklet]} kitapçığı</span>`
@@ -262,14 +263,14 @@ const Scanner = (() => {
       state.saved.add(student.id);
       state.pending = null;
       updateCount();
-      showCard(`<div class="row"><div class="grow name">${esc(student.name)}</div><span class="pill ok">Kaydedildi</span></div>${nums}<div class="row small">${notes}<a href="#/result/${exam.id}/${student.id}" data-scan="edit" class="grow" style="text-align:right">Düzelt ›</a></div>`);
+      showCard(`<div class="row"><div class="grow name">${esc(student.name)}</div><span class="pill ok">Kaydedildi</span></div>${nums}${grid}<div class="row small">${notes}<a href="#/result/${exam.id}/${student.id}" data-scan="edit" class="grow" style="text-align:right">Düzelt ›</a></div>`);
       el.status.hidden = false;
       setStatus(`${student.name} kaydedildi ✓`, 'ok');
       return;
     }
     state.frozen = true;
     el.video.pause();
-    showCard(`<div class="name">${esc(student.name)}</div><div class="small muted">${esc(student.number ? 'No ' + student.number : '')}${needsLook && el.auto.checked && !fromPhoto ? ' · otomatik kayıt kontrol için durdu' : ''}</div>${nums}<div class="row small">${notes}</div>
+    showCard(`<div class="name">${esc(student.name)}</div><div class="small muted">${esc(student.number ? 'No ' + student.number : '')}${needsLook && el.auto.checked && !fromPhoto ? ' · otomatik kayıt kontrol için durdu' : ''}</div>${nums}${grid}<div class="row small">${notes}</div>
       <div class="btns"><button class="btn" data-scan="retry">${fromPhoto ? 'Kapat' : 'Tekrar oku'}</button><button class="btn primary" data-scan="save">Kaydet</button></div>
       <button class="btn block" style="margin-top:8px" data-scan="save-edit">Kaydet ve düzelt ›</button>`);
   }
@@ -285,6 +286,19 @@ const Scanner = (() => {
       ${list.length ? `<div class="chips" style="max-height:40vh;overflow:auto">${list.map((s) => `<a class="chip" href="#/result/${state.exam.id}/${s.id}" data-scan="edit">${esc(s.name)}</a>`).join('')}</div>`
         : '<p class="small">Bu sınıfta okutulmamış öğrenci kalmadı. Okutulmuş bir sonucu düzeltmek için sınav sayfasındaki listeden öğrenciye dokunun.</p>'}
       <button class="btn block" style="margin-top:10px" data-scan="retry">Vazgeç</button>`);
+  }
+
+  // Kartta bütün soruların özeti: işaretlenen şık; yeşil doğru, kırmızı yanlış (yanında doğru cevap),
+  // gri boş, çizgili iptal; belirsiz okunanlar sarı çerçeveli
+  function answerGrid(exam, answers, bk, per, uncertain) {
+    const key = Store.keyFor(exam, bk), unsure = new Set(uncertain), noKey = Store.keyEmpty(exam);
+    const L = Layout.LETTERS;
+    return `<div class="qa-grid">${answers.map((a, i) => {
+      const p = per[i], mark = a == null ? '–' : a === -1 ? '✱' : L[a];
+      const cls = a == null ? 'blank' : noKey ? '' : p === 'd' ? 'ok' : p === 'y' ? 'bad' : 'off';
+      const fix = p === 'y' && key[i] != null ? `<small>${L[key[i]]}</small>` : '';
+      return `<span class="qa ${cls}${unsure.has(i) ? ' unsure' : ''}"><i>${i + 1}</i>${mark}${fix}</span>`;
+    }).join('')}</div>`;
   }
 
   function showCard(html) {

@@ -187,6 +187,17 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; font-varian
 .scan-card .nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0; text-align: center; }
 .scan-card .nums b { display: block; font-size: 24px; }
 .scan-card .nums span { font-size: 12px; color: var(--muted); }
+.scan-card { max-height: calc(100vh - 150px - var(--safe-t) - var(--safe-b)); max-height: calc(100dvh - 150px - var(--safe-t) - var(--safe-b)); overflow-y: auto; }
+.qa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 4px; margin: 0 0 10px; max-height: 34vh; overflow-y: auto; }
+.qa { display: flex; align-items: baseline; gap: 3px; padding: 4px 6px; border-radius: 8px; font-weight: 700; font-size: 14px; background: var(--bg); border: 1.5px solid transparent; }
+.qa i { font-style: normal; font-weight: 600; font-size: 11px; color: var(--muted); min-width: 16px; }
+.qa small { font-size: 11px; font-weight: 600; opacity: .8; }
+.qa small::before { content: '→'; }
+.qa.ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.qa.bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.qa.blank { color: var(--muted); }
+.qa.off { color: var(--muted); text-decoration: line-through; }
+.qa.unsure { border-color: var(--warn); }
 
 
 /* Giriş ekranı */
