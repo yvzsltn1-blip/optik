@@ -1,6 +1,6 @@
 // Offline application cache; network first.
-const CACHE = 'optik-v25';
-const FILES = ['./', 'index.html', 'css/style.css', 'css/insights.css', 'css/topics.css', 'js/layout.js', 'js/omr.js', 'js/omr-worker.js', 'js/store.js', 'js/pdf.js', 'js/report.js', 'js/scanner.js', 'js/analytics.js', 'js/topic-seeds.js', 'js/topics.js', 'js/app.js', 'js/update.js', 'js/cloud.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png'];
+const CACHE = 'optik-v26';
+const FILES = ['./', 'index.html', 'css/style.css', 'css/insights.css', 'css/topics.css', 'css/papers.css', 'js/layout.js', 'js/omr.js', 'js/omr-worker.js', 'js/store.js', 'js/pdf.js', 'js/report.js', 'js/scanner.js', 'js/analytics.js', 'js/topic-seeds.js', 'js/topics.js', 'js/papers.js', 'js/app.js', 'js/update.js', 'js/cloud.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));

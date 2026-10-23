@@ -4,7 +4,7 @@ const el=s=>{if(!els.has(s))els.set(s,{style:{},dataset:{},innerHTML:'',value:''
 const toasts=[];
 const ctx={console, crypto: globalThis.crypto, setTimeout,clearTimeout, URL, Blob, Map, Set, Date, Math,localStorage:{getItem(){return null},setItem(){}},navigator:{userAgent:''},location:{hash:'#/exams',protocol:'http:'},document:{querySelector:el,querySelectorAll(){return[]},getElementById:(id)=>el('#'+id)},matchMedia(){return{matches:true}},addEventListener(){},scrollTo(){},scrollY:0};ctx.window=ctx;
 vm.createContext(ctx);
-for(const f of ['layout','store','topic-seeds','topics'])vm.runInContext(fs.readFileSync('app/js/'+f+'.js','utf8'),ctx);
+for(const f of ['layout','store','topic-seeds','topics','papers'])vm.runInContext(fs.readFileSync('app/js/'+f+'.js','utf8'),ctx);
 vm.runInContext(`var c=Store.saveClass({name:'5A'});var s1=Store.addStudent(c.id,'Ali Veli','12');var ex=Store.saveExam({classId:c.id,name:'Deneme',date:'2026-10-23',questionCount:10,optionCount:4,key:[0,1,2,3,0,1,2,3,0,1]});`,ctx);
 assert(ctx.s1,'Store.saveStudent bulunamadı');
 let app=fs.readFileSync('app/js/app.js','utf8').replace('window.App = { render };','window.App = { render, applyAnswerText };');

@@ -1,0 +1,13 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Sınav kâğıtları: her öğretmen yalnızca kendi klasörünü okuyup yazar.
+    // Yalnızca resim ve PDF, dosya başına en çok 25 MB.
+    match /users/{uid}/papers/{paperId}/{file} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 25 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|application/pdf');
+    }
+  }
+}

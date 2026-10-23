@@ -2,12 +2,12 @@
 // aracılığıyla Firestore'a yazılır. Her değişiklik emit() ile bildirilir.
 const Store = (() => {
   const KEY = 'optik-okuyucu-v1';
-  const KINDS = ['classes', 'students', 'exams', 'results'];
+  const KINDS = ['classes', 'students', 'exams', 'results', 'papers'];
   let db = load();
   let sink = null; // (op: 'put'|'del', kind, obj) → buluta yazar
 
   function empty() {
-    return { version: 1, nextId: 1, classes: [], students: [], exams: [], results: [] };
+    return { version: 1, nextId: 1, classes: [], students: [], exams: [], results: [], papers: [] };
   }
 
   function load() {
@@ -69,6 +69,7 @@ const Store = (() => {
     db.exams = db.exams.filter((e) => e.classId !== id);
     db.students = db.students.filter((s) => s.classId !== id);
     db.classes = db.classes.filter((c) => c.id !== id);
+    unlinkExams(examIds);
     save();
   }
 
@@ -127,7 +128,38 @@ const Store = (() => {
     emit('del', 'exams', getExam(id));
     db.results = db.results.filter((r) => r.examId !== id);
     db.exams = db.exams.filter((e) => e.id !== id);
+    unlinkExams(new Set([id]));
     save();
+  }
+
+  // --- Sınav kâğıtları (soru dosyaları) ---
+  // Bir kâğıt birden çok sınava bağlanabilir (ör. 5A, 5B, 5C'nin ortak yazılısı); dosyalar bir kez
+  // yüklenir. Dosyaların kendisi Firebase Storage'da durur, burada yalnızca adresleri tutulur.
+  // Kimlik metindir: optik formdaki öğrenci kodlarıyla aynı sayaçtan pay almasın.
+  const papers = () => db.papers.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || '').localeCompare(a.createdAt || ''));
+  const getPaper = (id) => db.papers.find((p) => p.id === id);
+  const examPapers = (examId) => papers().filter((p) => p.examIds?.includes(examId));
+  const newPaperId = () => 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  function savePaper(p) {
+    const old = p.id && getPaper(p.id);
+    if (old) p = Object.assign(old, p);
+    else { p.id = p.id || newPaperId(); p.createdAt = new Date().toISOString(); db.papers.push(p); }
+    save();
+    emit('put', 'papers', p);
+    return p;
+  }
+  function deletePaper(id) {
+    emit('del', 'papers', getPaper(id));
+    db.papers = db.papers.filter((p) => p.id !== id);
+    save();
+  }
+  // Silinen sınavlar kâğıtlardan çıkarılır; kâğıdın kendisi arşivde kalır.
+  function unlinkExams(ids) {
+    for (const p of db.papers) {
+      if (!p.examIds?.some((x) => ids.has(x))) continue;
+      p.examIds = p.examIds.filter((x) => !ids.has(x));
+      emit('put', 'papers', p);
+    }
   }
 
   // --- Sonuçlar ---
@@ -314,6 +346,7 @@ const Store = (() => {
     students, getStudent, addStudent, updateStudent, deleteStudent, newParentCode, parentExams,
     allStudents: () => db.students,
     exams, getExam, saveExam, deleteExam,
+    papers, getPaper, examPapers, newPaperId, savePaper, deletePaper,
     results, studentResults, getResult, saveResult, deleteResult, markSent,
     score, scoreResult, mainScore, mainLabel, usesPoints, examTopics, topicScores, clearUncertain, bookletCount, bookletOf, keyFor, setKey, keyEmpty, setBooklet, exportJSON, importJSON,
     setSink, isEmpty, all, setCollection, clearLocal,

@@ -216,7 +216,7 @@
       <span class="date-badge">${d ? `<b>${d.getDate()}</b><span>${d.toLocaleDateString('tr-TR', { month: 'short' })}</span>` : '<b>–</b>'}</span>
       <span class="exam-tile-body"><span class="exam-tile-name">${esc(e.name)}</span>
         <span class="progress" aria-hidden="true"><i style="width:${total ? Math.round(res.length / total * 100) : 0}%"></i></span>
-        <span class="exam-tile-meta">${res.length}/${total} okundu${avg != null ? ` · ort. ${fmt(avg, 1)} ${Store.mainLabel(e).toLocaleLowerCase('tr-TR')}` : ''}${keyed ? '' : ' · <span class="pill warn">Anahtar yok</span>'}</span></span>
+        <span class="exam-tile-meta">${res.length}/${total} okundu${avg != null ? ` · ort. ${fmt(avg, 1)} ${Store.mainLabel(e).toLocaleLowerCase('tr-TR')}` : ''}${keyed ? '' : ' · <span class="pill warn">Anahtar yok</span>'}${Papers.has(e.id) ? ' · <span class="paper-flag">Kâğıt ekli</span>' : ''}</span></span>
       <span class="chev"></span></a>`;
   }
 
@@ -298,7 +298,7 @@
     const status = !keyed ? 'Anahtar eksik' : !res.length ? 'Okumaya hazır' : res.length >= total ? 'Tamamlandı' : 'Okuma sürüyor';
     return `<a class="exam-card" style="${classColor(e.classId)}" href="#/exam/${e.id}">
       <div class="exam-card-top"><span class="class-badge">${esc(c?.name || 'Sınıf silinmiş')}</span><span class="exam-date">${fmtDate(e.date)}</span><span class="exam-card-arrow" aria-hidden="true">↗</span></div>
-      <h3>${esc(e.name)}</h3><div class="exam-card-detail"><span>${e.questionCount} soru</span><span> ${Store.bookletCount(e) > 1 ? Store.bookletCount(e) + ' kitapçık' : 'Tek kitapçık'}</span></div>
+      <h3>${esc(e.name)}</h3><div class="exam-card-detail"><span>${e.questionCount} soru</span><span> ${Store.bookletCount(e) > 1 ? Store.bookletCount(e) + ' kitapçık' : 'Tek kitapçık'}</span>${Papers.has(e.id) ? '<span class="paper-flag">Kâğıt ekli</span>' : ''}</div>
       <div class="exam-card-bottom"><span class="exam-status ${keyed ? '' : 'needs-key'}">${status}</span><span><b>${res.length}</b><span class="read-divider">/</span>${total} okundu</span></div>
       <span class="exam-progress" aria-hidden="true"><i style="width:${percent}%"></i></span></a>`;
   }
@@ -310,7 +310,7 @@
     if (!list.length) return `<div class="card empty"><p style="font-size:40px;margin:0">📝</p><p>Henüz sınav yok.</p><button class="btn primary" data-act="new-exam">Sınav oluştur</button></div>`;
     if (examClassFilter && !Store.getClass(+examClassFilter)) examClassFilter = '';
     const read = list.reduce((n, e) => n + Store.results(e.id).length, 0);
-    return `<div class="exam-editorial"><div><span class="eyebrow">ÖLÇME & DEĞERLENDİRME</span><h2>Sınav defteri<span>.</span></h2><p>Her değerlendirme, yeni bir adım.</p></div><a class="exam-insight-link" href="#/analytics" aria-label="İstatistikleri aç"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 20h16M7 16v-5m5 5V4m5 12V8" stroke-linecap="round"/></svg><span>Analizler ↗</span></a></div>
+    return `<div class="exam-editorial"><div><span class="eyebrow">ÖLÇME & DEĞERLENDİRME</span><h2>Sınav defteri<span>.</span></h2><p>Her değerlendirme, yeni bir adım.</p></div><div class="exam-links"><a class="exam-insight-link" href="#/analytics" aria-label="İstatistikleri aç"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 20h16M7 16v-5m5 5V4m5 12V8" stroke-linecap="round"/></svg><span>Analizler ↗</span></a><a class="exam-insight-link" href="#/papers" aria-label="Sınav kâğıtlarını aç"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg><span>Kâğıtlar ↗</span></a></div></div>
       <div class="exam-overview"><span><b>${list.length}</b> sınav</span><span><b>${Store.classes().length}</b> sınıf</span><span><b>${read}</b> okunan form</span></div>
       <div class="exam-tools"><label class="exam-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="exam-search" type="search" aria-label="Sınav veya sınıf ara" placeholder="Sınav veya sınıf ara…" value="${esc(examSearch)}"></label>
       <div class="class-filters" role="group" aria-label="Sınıfa göre filtrele"><button data-exam-class="" aria-pressed="${!examClassFilter}">Tüm sınıflar <span>${list.length}</span></button>${Store.classes().map(c => `<button style="${classColor(c.id)}" data-exam-class="${c.id}" aria-pressed="${examClassFilter === String(c.id)}"><i aria-hidden="true"></i>${esc(c.name)}<span>${Store.exams(c.id).length}</span></button>`).join('')}</div></div>
@@ -405,6 +405,7 @@
           ? counts.map((n, b) => `${L[b]}: ${n}/${e.questionCount}`).join(' · ')
           : keyDone ? 'Tüm sorular girildi' : `${counts[0]}/${e.questionCount} soru girildi`}</div></div>
         ${keyDone ? '<span class="pill ok">Hazır</span>' : keyAny ? '<span class="pill warn">Eksik</span>' : '<span class="pill warn">Girilmedi</span>'}<span class="chev muted">›</span></a>
+      ${Papers.examSection(e)}
 
       <h2>Özet</h2>
       <div class="stats">
@@ -1132,6 +1133,7 @@
       case 'class': html = classView(id); break;
       case 'student': html = studentView(id); break;
       case 'exams': html = examsView(); break;
+      case 'papers': html = Papers.libraryView(); break;
       case 'analytics': html = analyticsView(); break;
       case 'topics': setTop('Konu kütüphanesi', id ? `#/exam/${id}/key` : '#/settings'); html = Topics.libraryView(); break;
       case 'exam': html = b === 'key' ? keyView(id, +c || 0) : b === 'stats' ? statsView(id, +c || 0) : b === 'send' ? sendView(id) : examView(id); break;
@@ -1297,6 +1299,7 @@
   }
 
   Topics.bind(view, { modal, closeModal, confirmBox, toast, render });
+  Papers.bind(view, { modal, closeModal, confirmBox, toast, render, setTop, classColor, fmtDate });
   window.App = { render };
   render();
   lastHash = location.hash;

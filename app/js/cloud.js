@@ -1,5 +1,6 @@
 // Firebase: e-posta/şifre ile giriş ve Firestore eşitlemesi.
-// Veriler users/{uid}/{classes|students|exams|results}/{id} altında tutulur.
+// Veriler users/{uid}/{classes|students|exams|results|papers}/{id} altında tutulur.
+// Sınav kâğıdı dosyaları Storage'da users/{uid}/papers/{kâğıt}/ altında durur (storage.rules).
 // Firestore'un çevrimdışı önbelleği sayesinde internet yokken de yazılır, bağlantı gelince gönderilir.
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
@@ -11,6 +12,7 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   collection, doc, writeBatch, onSnapshot, setDoc, deleteDoc, query, where, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getStorage, ref as fileRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyAziiYrvCwYV0J6jPz1Amkr_nFB3NKHPsI',
@@ -27,6 +29,8 @@ const fs = initializeFirestore(app, {
   ignoreUndefinedProperties: true,
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
+
+const storage = getStorage(app);
 
 const $ = (s) => document.querySelector(s);
 let user = null;
@@ -358,6 +362,23 @@ window.Cloud = {
     const data = { name: topic.name.trim(), grade: topic.grade, unit: (topic.unit || '').trim(), deleted: !!topic.deleted, updatedBy: user.uid, updatedAt: serverTimestamp() };
     await setDoc(doc(fs, 'topicCatalog', topic.id), data);
     // Sunucu dinleyicisi aynı kaydı diğer açık hesaplara da iletir.
+  },
+  // Sınav kâğıdı dosyası yükler; onProgress(0..1). { path, url } döner.
+  uploadPaperFile(paperId, name, blob, onProgress) {
+    if (!user) return Promise.reject(new Error('Dosya yüklemek için hesabınıza giriş yapın.'));
+    if (!navigator.onLine) return Promise.reject(new Error('Dosya yüklemek için internet bağlantısı gerekiyor.'));
+    const path = `users/${user.uid}/papers/${paperId}/${name}`;
+    const task = uploadBytesResumable(fileRef(storage, path), blob, { contentType: blob.type, cacheControl: 'private, max-age=31536000' });
+    return new Promise((resolve, reject) => {
+      task.on('state_changed', (s) => onProgress?.(s.totalBytes ? s.bytesTransferred / s.totalBytes : 0), (e) => {
+        reject(new Error(e.code === 'storage/unauthorized' ? 'Dosya yükleme izni yok.' : e.code === 'storage/retry-limit-exceeded' ? 'Bağlantı koptu, tekrar deneyin.' : 'Dosya yüklenemedi: ' + (e.code || e.message)));
+      }, async () => resolve({ path, url: await getDownloadURL(task.snapshot.ref) }));
+    });
+  },
+  // Silinemeyen dosya (çevrimdışı, zaten silinmiş) kaydı engellemez
+  deletePaperFile(path) {
+    if (!user || !path) return Promise.resolve();
+    return deleteObject(fileRef(storage, path)).catch((e) => { if (e.code !== 'storage/object-not-found') console.error('Dosya silinemedi', path, e); });
   },
   get status() { return status; },
   logout: () => signOut(auth),
