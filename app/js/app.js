@@ -402,6 +402,31 @@
     hint();
   }
 
+  // Aynı sınavı (ayarlar, cevap anahtarı, puanlar, konular) başka sınıflara kopyalar; sınav kâğıdı
+  // bağlıysa yeni sınavlara da bağlanır. Aynı kademedeki sınıflar (5A → 5B, 5C) seçili gelir.
+  function copyExamForm(id) {
+    const e = Store.getExam(id);
+    const gradeOf = (c) => c.name.match(/^\s*(\d+)/)?.[1] || '';
+    const grade = gradeOf(Store.getClass(e.classId));
+    const same = (c) => Store.exams(c.id).some((x) => x.name.trim().toLocaleLowerCase('tr-TR') === e.name.trim().toLocaleLowerCase('tr-TR'));
+    const others = Store.classes().filter((c) => c.id !== e.classId);
+    if (!others.length) return toast('Kopyalamak için önce başka bir sınıf ekleyin');
+    modal('Diğer sınıflara kopyala', `
+      <p class="small muted" style="margin-top:0"><b>${esc(e.name)}</b> seçtiğiniz sınıflar için de oluşturulur: soru sayısı, şıklar, form, cevap anahtarı, puanlar ve konular aynen kopyalanır.</p>
+      <div class="paper-exam-list">${others.map((c) => { const dup = same(c); return `<label class="paper-exam" style="${classColor(c.id)}">
+        <input type="checkbox" name="cls" value="${c.id}" ${grade && gradeOf(c) === grade && !dup ? 'checked' : ''}><span class="paper-exam-class">${esc(c.name)}</span>
+        <span class="grow"><b>${Store.students(c.id).length} öğrenci</b>${dup ? '<small>Bu adla bir sınavı zaten var</small>' : ''}</span></label>`; }).join('')}</div>`,
+    (fd) => {
+      const ids = fd.getAll('cls').map(Number);
+      if (!ids.length) { toast('En az bir sınıf seçin'); return false; }
+      const { id: _, classId: __, ...fields } = JSON.parse(JSON.stringify(e));
+      const copies = ids.map((classId) => Store.saveExam({ ...JSON.parse(JSON.stringify(fields)), classId }));
+      for (const p of Store.examPapers(e.id)) Store.savePaper({ id: p.id, examIds: [...p.examIds, ...copies.map((x) => x.id)] });
+      toast(`${ids.map((c) => Store.getClass(c).name).join(', ')} için sınav oluşturuldu`);
+      render();
+    }, 'Kopyala');
+  }
+
   function examStats(exam) {
     const rows = Store.results(exam.id).map((r) => { const s = Store.scoreResult(exam, r); return { r, s, m: Store.mainScore(exam, s), st: Store.getStudent(r.studentId) }; }).filter((x) => x.st);
     rows.sort((a, b) => b.m - a.m || a.st.name.localeCompare(b.st.name, 'tr'));
@@ -428,6 +453,7 @@
       <div class="small muted" style="margin:0 4px 10px">${esc(c.name)} · ${fmtDate(e.date)} · ${e.questionCount} soru · ${e.optionCount} şık · ${fmtLabel(e.format)}${e.penalty ? ` · ${e.penalty} yanlış 1 doğruyu götürür` : ''}${Store.usesPoints(e) ? ' · 100 üzerinden puan' : ''}</div>
       <button class="btn primary big" data-act="scan" data-id="${id}">📷 Optik okut</button>
       <button class="btn block" style="margin-top:10px" data-act="pdf" data-id="${id}" ${all.length ? '' : 'disabled'}>📄 Optik formları PDF olarak al (${all.length} öğrenci)</button>
+      <button class="btn block" style="margin-top:10px" data-act="copy-exam" data-id="${id}">⧉ Diğer sınıflara kopyala</button>
       <a class="card pad row" href="#/exam/${id}/key" style="margin-top:12px;color:inherit">
         <div class="grow"><b>Cevap anahtarı${nb > 1 ? 'ları' : ''}</b><div class="small muted">${nb > 1
           ? counts.map((n, b) => `${L[b]}: ${n}/${e.questionCount}`).join(' · ')
@@ -1220,6 +1246,7 @@
       case 'del-class': confirmBox('Sınıf silinsin mi?', 'Sınıftaki tüm öğrenciler, sınavlar ve sonuçlar silinecek. Bu işlem geri alınamaz.', 'Sil', () => { Store.deleteClass(id); location.hash = '#/classes'; }); break;
       case 'new-exam': examForm(null, d.class ? +d.class : null); break;
       case 'edit-exam': examForm(Store.getExam(id)); break;
+      case 'copy-exam': copyExamForm(id); break;
       case 'del-exam': confirmBox('Sınav silinsin mi?', 'Bu sınavın tüm sonuçları silinecek.', 'Sil', () => { Store.deleteExam(id); location.hash = '#/exams'; }); break;
       case 'scan': {
         const e = Store.getExam(id);

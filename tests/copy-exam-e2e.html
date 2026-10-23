@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>copy-exam-e2e</title>
+<iframe id="f" style="width:500px;height:900px;border:0"></iframe>
+<pre id="out"></pre>
+<script>
+localStorage.clear();
+const f = document.getElementById('f');
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const out = (s) => (document.getElementById('out').textContent += s + '\n');
+f.src = '../app/index.html';
+let started = false;
+f.onload = () => { if (!started) { started = true; run().catch((e) => out('HATA ' + e + ' ' + e.stack)); } };
+async function run() {
+  const w = f.contentWindow, S = w.eval('Store');
+  const a = S.saveClass({ name: '5-A' }), b = S.saveClass({ name: '5-B' }), c = S.saveClass({ name: '5-C' }), d = S.saveClass({ name: '6-A' });
+  for (const k of [a, b, c, d]) S.addStudent(k.id, 'Öğrenci ' + k.name, '1');
+  const e = S.saveExam({ name: 'Kesirler Testi', classId: a.id, date: '2026-10-20', questionCount: 10, optionCount: 4, format: 'a6', penalty: 4, booklets: 1, scoring: 'net', key: [0, 1, 2, 3, 0, 1, 2, 3, 0, 1], extraKeys: [] });
+  w.location.hash = '#/exam/' + e.id;
+  await wait(400);
+  w.document.querySelector('[data-act=copy-exam]').click();
+  await wait(200);
+  const boxes = [...w.document.querySelectorAll('#modal input[name=cls]')];
+  out('seçenekler: ' + boxes.map((x) => S.getClass(+x.value).name + (x.checked ? '✓' : '')).join(' '));
+  w.document.querySelector('#modal button.primary').click();
+  await wait(300);
+  for (const k of [a, b, c, d]) out(k.name + ': ' + S.exams(k.id).map((x) => `${x.name} q${x.questionCount} k${x.optionCount} p${x.penalty} key=${x.key.join('')} id${x.id}`).join(' | '));
+  out('toast: ' + w.document.querySelector('#toast').textContent);
+  // ikinci açılış: 5-B ve 5-C artık "zaten var" olmalı, seçili gelmemeli
+  w.document.querySelector('[data-act=copy-exam]').click();
+  await wait(200);
+  out('tekrar: ' + [...w.document.querySelectorAll('#modal label.paper-exam')].map((l) => l.textContent.replace(/\s+/g, ' ').trim() + (l.querySelector('input').checked ? ' ✓' : '')).join(' / '));
+  w.document.querySelector('#auth').remove();
+  document.title = 'DONE';
+}
+</script>
