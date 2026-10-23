@@ -14,6 +14,7 @@ const Scanner = (() => {
     root: $('scanner'), video: $('scan-video'), overlay: $('scan-overlay'), exam: $('scan-exam'),
     count: $('scan-count'), status: $('scan-status'), card: $('scan-card'), auto: $('scan-auto'),
     file: $('scan-file'), torch: $('scan-torch'), manual: $('scan-manual'),
+    unpeek: $('scan-unpeek'),
   };
   const work = document.createElement('canvas');
   const wctx = work.getContext('2d', { willReadFrequently: true });
@@ -100,6 +101,7 @@ const Scanner = (() => {
     el.video.srcObject = null;
     el.root.hidden = true;
     el.torch.hidden = true;
+    peek(false);
     document.body.style.overflow = '';
     clearOverlay();
     done?.();
@@ -184,7 +186,7 @@ const Scanner = (() => {
     const todo = res.forms.filter((f) => !state.saved.has(f.id)).sort((a, b) => inClass(b) - inClass(a));
     let form = todo[0];
     if (!form) {
-      drawOverlay(res, null, w, h, fromPhoto);
+      drawOverlay(res, el.root.classList.contains('peek') ? res.forms[0] : null, w, h, fromPhoto);
       const many = res.forms.length > 1;
       setStatus(many ? 'Görünen formların hepsi kaydedildi ✓' : `${Store.getStudent(res.forms[0].id).name} kaydedildi ✓ Sıradaki formu gösterin`, 'ok');
       if (fromPhoto) setTimeout(() => { if (state?.photo) resume(); }, 1800);
@@ -263,7 +265,8 @@ const Scanner = (() => {
       state.saved.add(student.id);
       state.pending = null;
       updateCount();
-      showCard(`<div class="row"><div class="grow name">${esc(student.name)}</div><span class="pill ok">Kaydedildi</span></div>${nums}${grid}<div class="row small">${notes}<a href="#/result/${exam.id}/${student.id}" data-scan="edit" class="grow" style="text-align:right">Düzelt ›</a></div>`);
+      showCard(`<div class="row"><div class="grow name">${esc(student.name)}</div><span class="pill ok">Kaydedildi</span></div>${nums}${grid}<div class="row small">${notes}<a href="#/result/${exam.id}/${student.id}" data-scan="edit" class="grow" style="text-align:right">Düzelt ›</a></div>
+        <button class="btn block" style="margin-top:8px" data-scan="peek">👁 Formda gör</button>`);
       el.status.hidden = false;
       setStatus(`${student.name} kaydedildi ✓`, 'ok');
       return;
@@ -272,7 +275,7 @@ const Scanner = (() => {
     el.video.pause();
     showCard(`<div class="name">${esc(student.name)}</div><div class="small muted">${esc(student.number ? 'No ' + student.number : '')}${needsLook && el.auto.checked && !fromPhoto ? ' · otomatik kayıt kontrol için durdu' : ''}</div>${nums}${grid}<div class="row small">${notes}</div>
       <div class="btns"><button class="btn" data-scan="retry">${fromPhoto ? 'Kapat' : 'Tekrar oku'}</button><button class="btn primary" data-scan="save">Kaydet</button></div>
-      <button class="btn block" style="margin-top:8px" data-scan="save-edit">Kaydet ve düzelt ›</button>`);
+      <div class="btns" style="margin-top:8px"><button class="btn" data-scan="peek">👁 Formda gör</button><button class="btn" data-scan="save-edit">Kaydet ve düzelt ›</button></div>`);
   }
 
   // Okunamayan form için: okutulmamış öğrenci seçilir, cevaplar sonuç sayfasında elle girilir
@@ -301,7 +304,14 @@ const Scanner = (() => {
     }).join('')}</div>`;
   }
 
+  // Önizleme: kart ve düğmeler gizlenir, ekranda yalnız form ve üzerindeki doğru/yanlış işaretleri kalır
+  function peek(on) {
+    el.root.classList.toggle('peek', on);
+    el.unpeek.hidden = !on;
+  }
+
   function showCard(html) {
+    peek(false);
     el.card.innerHTML = html;
     el.card.hidden = false;
     el.status.hidden = true;
@@ -312,6 +322,7 @@ const Scanner = (() => {
     state.frozen = null;
     state.pending = null;
     state.photo = null;
+    peek(false);
     el.card.hidden = true;
     el.status.hidden = false;
     clearOverlay();
@@ -447,6 +458,8 @@ const Scanner = (() => {
     else if (act === 'torch') toggleTorch();
     else if (act === 'retry') resume();
     else if (act === 'manual') manualPick();
+    else if (act === 'peek') peek(true);
+    else if (act === 'unpeek') peek(false);
     else if (act === 'save-edit') {
       const { student, answers, booklet, uncertain } = state.pending;
       const examId = state.exam.id;

@@ -182,6 +182,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; font-varian
 .scan-status.bad { background: var(--bad); }
 .scan-tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .scan-tools .scan-chip { white-space: nowrap; }
+#scanner.peek .scan-card, #scanner.peek .scan-tools, #scanner.peek .scan-status, #scanner.peek .scan-frame { display: none; }
+#scanner.peek .scan-bottom { background: none; }
+.scan-unpeek { font-weight: 700; padding: 12px 20px; background: rgba(255,255,255,.92); color: #111; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
 .scan-card { width: 100%; max-width: 480px; background: var(--card); color: var(--text); border-radius: 18px; padding: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
 .scan-card .name { font-size: 18px; font-weight: 700; }
 .scan-card .nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0; text-align: center; }
