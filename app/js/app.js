@@ -566,8 +566,7 @@
         <div class="stat"><b>${fmt(st.max)}</b><span>En yüksek</span></div>
         <div class="stat"><b>${fmt(st.min)}</b><span>En düşük</span></div>
       </div>
-      ${st.rows.length ? `<div class="btns"><a class="btn" href="#/exam/${id}/stats">📊 Sınav analizi</a><button class="btn" data-act="csv" data-id="${id}">⬇︎ Excel (CSV)</button></div>
-        <a class="btn block" style="margin-top:10px" href="#/exam/${id}/send">📨 Sonuçları velilere gönder${(() => { const n = st.rows.filter((x) => x.r.sentAt).length; return n ? ` (${n}/${st.rows.length} gönderildi)` : ''; })()}</a>` : ''}
+      ${st.rows.length ? `<div class="btns"><a class="btn" href="#/exam/${id}/stats">📊 Sınav analizi</a><button class="btn" data-act="csv" data-id="${id}">⬇︎ Excel (CSV)</button></div>` : ''}
 
       ${toCheck.length ? `<div class="card pad small" style="margin-top:12px;border:1.5px solid var(--warn)">⚠ <b>${toCheck.length} öğrencide</b> okuyucunun emin olamadığı işaret var. Satırlardaki ⚠ işaretine dokunup kontrol edin.</div>` : ''}
       <h2>Sonuçlar</h2>
@@ -746,7 +745,6 @@
           return `<button class="opt ${cls}" data-act="ans-set" data-e="${examId}" data-s="${studentId}" data-q="${i}" data-o="${j}">${L[j]}</button>`;
         }).join('')}<span class="mark">${mark}</span></div>`;
       }).join('')}</div></div>
-      ${r ? sendButtons(e, s, r, 'block') : ''}
       ${r ? `<button class="btn danger block" style="margin-top:28px" data-act="del-result" data-e="${examId}" data-s="${studentId}">Bu sonucu sil</button>` : ''}`;
   }
 
@@ -757,160 +755,7 @@
       <span class="small" style="min-width:64px;text-align:right">${rate == null ? '–' : '%' + Math.round(rate * 100)}<br><span class="muted">${note}</span></span></div>`;
   }
 
-  // ---------- Velilere gönderme ----------
-  // Mesaj seçenekleri cihazda hatırlanır. format: 'image' (JPG karne) | 'text'
-  const SEND_KEY = 'optik-veli-ayar';
-  function sendOpts() {
-    const def = { avg: true, rank: false, wrong: true, topics: true, format: 'image' };
-    try { return Object.assign(def, JSON.parse(localStorage.getItem(SEND_KEY) || '{}')); } catch (e) { return def; }
-  }
-
-  // Sade metin mesajı. Puan her zaman 100 üzerindendir (netli sınavda net 100'e oranlanır).
-  // Ek seçenekler (ortalama, sıralama, konular…) yalnızca karneyi etkiler.
-  function parentMessage(exam, student, r) {
-    const sc = Store.scoreResult(exam, r);
-    return [
-      `Sınav : ${exam.name}`,
-      `İsim : ${student.name}`,
-      `Doğru Sayısı : ${sc.correct}`,
-      `Yanlış Sayısı : ${sc.wrong}`,
-      `Boş Sayısı : ${sc.blank}`,
-      `Puan : ${fmt(Store.usesPoints(exam) ? sc.points : sc.pct, 1)}`,
-      ...(student.parentCode ? ['', `Tüm sınav sonuçları: ${PARENT_SITE} · Veli kodu: ${student.parentCode}`] : []),
-    ].join('\n');
-  }
-  // Karnenin yanında giden kısa yazı
-  const captionText = (exam, student) => `Sayın Veli, ${student.name} adlı öğrencimizin "${exam.name}" sınav sonuç karnesi ektedir.${window.Cloud?.name ? '\n' + window.Cloud.name : ''}`;
-
-  // Karne resmi (tuval)
-  function reportCanvas(exam, student, r, opts) {
-    const sc = Store.scoreResult(exam, r);
-    const st = examStats(exam);
-    const pts = Store.usesPoints(exam);
-    const nb = Store.bookletCount(exam);
-    const topics = opts.topics ? Store.topicScores(exam, r) : null;
-    return ReportCard.render({
-      examName: exam.name, dateText: fmtDate(exam.date), className: Store.getClass(exam.classId)?.name,
-      studentName: student.name, number: student.number, booklet: nb > 1 && r.booklet >= 0 && r.booklet != null ? L[r.booklet] : '',
-      mainValue: Store.mainScore(exam, sc), mainLabel: Store.mainLabel(exam), mainMax: pts ? 100 : sc.counted,
-      ratio: pts ? sc.points / 100 : sc.pct / 100, correct: sc.correct, wrong: sc.wrong, blank: sc.blank, net: sc.net, showNet: pts,
-      avg: opts.avg ? st.avg : null,
-      rank: opts.rank ? st.rows.findIndex((x) => x.st.id === student.id) + 1 : null, of: st.rows.length,
-      topics: topics || [], wrongList: opts.wrong ? sc.per.map((p, i) => (p === 'y' ? i + 1 : 0)).filter(Boolean) : [],
-      teacher: window.Cloud?.name || '',
-    });
-  }
-  const reportFileName = (exam, student) => `${student.name} - ${exam.name}.jpg`.replace(/[\\/:*?"<>|]/g, '_');
-
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const isPhone = () => matchMedia('(pointer: coarse)').matches;
-  // Veli telefonu tutulmaz: WhatsApp/Mesajlar hazır metinle açılır, kişiyi öğretmen seçer
-  function sendLinks(text) {
-    const t = encodeURIComponent(text);
-    return { wa: `https://wa.me/?text=${t}`, sms: `sms:${isIOS ? '&' : '?'}body=${t}` };
-  }
-
-  // Bir öğrenci için gönderme düğmeleri (gönderme ekranında ve sonuç sayfasında).
-  // Karne modunda: Paylaş (telefonun paylaşım menüsü) ve WhatsApp (karne panoya kopyalanır,
-  // WhatsApp sonuç metniyle açılır). Metin modunda: WhatsApp ve SMS.
-  function sendButtons(e, s, r, layout) {
-    const o = sendOpts();
-    const big = layout === 'block';
-    const cls = `btn ${big ? '' : 'small'}`;
-    const ids = `data-e="${e.id}" data-s="${s.id}"`;
-    let html;
-    if (o.format === 'image') {
-      const share = `<button class="${cls}" data-img="${isPhone() ? 'share' : 'dl'}" ${ids}>${isPhone() ? (big ? '📷 Karneyi paylaş' : 'Paylaş') : (big ? '⬇︎ Karneyi indir' : 'İndir')}</button>`;
-      const wa = `<button class="${cls}" data-img="wa" ${ids}>${big ? '💬 Veliye WhatsApp' : 'WhatsApp'}</button>`;
-      html = big ? `<div class="btns">${share}${wa}</div>` : `<div class="row" style="flex-wrap:nowrap">${share}${wa}</div>`;
-    } else {
-      const links = sendLinks(parentMessage(e, s, r));
-      const a = (ch, label) => `<a class="${cls}" href="${esc(links[ch])}" target="_blank" rel="noopener" data-sent="${ch}" ${ids}>${label}</a>`;
-      html = big ? `<div class="btns">${a('wa', '💬 Veliye WhatsApp')}${a('sms', '✉️ Veliye SMS')}</div>` : `<div class="row" style="flex-wrap:nowrap">${a('wa', 'WhatsApp')}${a('sms', 'SMS')}</div>`;
-    }
-    if (big && r.sentAt) html += `<p class="small muted" style="text-align:center">Veliye gönderildi: ${new Date(r.sentAt).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}</p>`;
-    return html;
-  }
-
-  // Karne düğmeleri. Paylaşım ve panoya kopyalama kullanıcı dokunuşunun içinde, beklemeden başlar.
-  function sendImage(mode, examId, studentId) {
-    const e = Store.getExam(examId), s = Store.getStudent(studentId), r = Store.getResult(examId, studentId);
-    if (!e || !s || !r) return;
-    const canvas = reportCanvas(e, s, r, sendOpts());
-    const mark = () => { Store.markSent(examId, studentId, mode === 'wa' ? 'wa-img' : 'img'); setTimeout(() => render(true), 300); };
-    if (mode === 'dl') {
-      download(reportFileName(e, s), ReportCard.toBlob(canvas), 'image/jpeg');
-      return mark();
-    }
-    if (mode === 'share') {
-      const file = new File([ReportCard.toBlob(canvas)], reportFileName(e, s), { type: 'image/jpeg' });
-      if (navigator.canShare?.({ files: [file] })) {
-        navigator.share({ files: [file], text: captionText(e, s) }).then(mark).catch((err) => { if (err.name !== 'AbortError') toast('Paylaşılamadı: ' + err.message); });
-      } else {
-        download(file.name, file, 'image/jpeg');
-        mark();
-      }
-      return;
-    }
-    // WhatsApp: karneyi panoya kopyala (PNG; Safari yalnız PNG kabul eder), WhatsApp'ı aç (kişiyi öğretmen seçer)
-    try {
-      navigator.clipboard.write([new ClipboardItem({ 'image/png': ReportCard.toBlob(canvas, 'image/png') })])
-        .then(() => toast('Karne kopyalandı. WhatsApp\'ta mesaj alanına basılı tutup "Yapıştır" deyin.'))
-        .catch(() => toast('Karne kopyalanamadı; "Paylaş" düğmesini kullanın.'));
-    } catch (err) { toast('Bu cihaz resim kopyalamayı desteklemiyor; "Paylaş" düğmesini kullanın.'); }
-    // Sohbet sonuçların tam metniyle açılır; karne yapıştırılmasa da veli sonucu almış olur
-    window.open(sendLinks(parentMessage(e, s, r)).wa, '_blank', 'noopener');
-    mark();
-  }
-
-  // Tüm karneler: telefonda tek seferde paylaşım (ör. Fotoğraflar'a kaydet), bilgisayarda tek tek indirme
-  function sendAllImages(examId) {
-    const e = Store.getExam(examId);
-    const o = sendOpts();
-    const rows = examStats(e).rows;
-    const files = rows.map((x) => new File([ReportCard.toBlob(reportCanvas(e, x.st, x.r, o))], reportFileName(e, x.st), { type: 'image/jpeg' }));
-    if (isPhone() && navigator.canShare?.({ files })) {
-      navigator.share({ files }).catch((err) => { if (err.name !== 'AbortError') toast('Paylaşılamadı: ' + err.message); });
-    } else {
-      files.forEach((f, i) => setTimeout(() => download(f.name, f, 'image/jpeg'), i * 300));
-      toast(`${files.length} karne indiriliyor`);
-    }
-  }
-
-  function sendView(id) {
-    const e = Store.getExam(id);
-    if (!e) return notFound();
-    setTop('Velilere gönder', `#/exam/${id}`);
-    const st = examStats(e);
-    if (!st.rows.length) return '<div class="card empty">Henüz okutulan optik yok</div>';
-    const o = sendOpts();
-    const img = o.format === 'image';
-    const sent = st.rows.filter((x) => x.r.sentAt).length;
-    const sample = st.rows[0];
-    const chk = (k, label) => `<label class="row" style="padding:6px 0"><input type="checkbox" data-opt="${k}" ${o[k] ? 'checked' : ''}> ${label}</label>`;
-    const ordered = st.rows.slice().sort((a, b) => (+a.st.number || 1e9) - (+b.st.number || 1e9) || a.st.name.localeCompare(b.st.name, 'tr'));
-    const how = img
-      ? (isPhone()
-        ? '<b>WhatsApp</b> sonuç mesajıyla açılır ve karne kopyalanır: veliyi seçip mesaj alanına basılı tutun, <b>Yapıştır</b> deyin. <b>Paylaş</b> karneyi telefonun paylaşım menüsüyle gönderir (kişiyi siz seçersiniz).'
-        : 'Bilgisayarda karneler JPG olarak indirilir. Telefondan açarsanız doğrudan paylaşabilirsiniz.')
-      : 'Düğmeye basınca WhatsApp ya da Mesajlar hazır mesajla açılır; veliyi seçip <b>Gönder</b>\'e basın ve uygulamaya geri dönün.';
-    return `
-      <div class="page-intro"><span class="eyebrow">Veli iletişimi</span><h2>Başarıyı paylaşın.</h2><p>${esc(e.name)} · ${st.rows.length} öğrenci karnesi</p></div>
-      <div class="seg" style="margin-bottom:16px"><button class="${img ? 'on' : ''}" data-fmt="image">Sonuç karnesi</button><button class="${img ? '' : 'on'}" data-fmt="text">Metin mesajı</button></div>
-      <div class="card pad small">${how} Gönderilenler işaretlenir.</div>
-      ${img ? `<h2>Karnede olsun</h2>
-      <div class="card pad report-options">${chk('avg', 'Sınıf ortalaması')}${chk('rank', 'Sınıf sıralaması')}${chk('wrong', 'Yanlış yaptığı soru numaraları')}${e.topics?.length ? chk('topics', 'Konulara göre başarı') : ''}
-        ${window.Cloud?.name ? '' : '<p class="small muted" style="margin-bottom:0">İpucu: Ayarlar\'dan adınızı girerseniz karnenin sonuna imza olarak eklenir.</p>'}</div>` : ''}
-      <h2>Karne önizlemesi <span class="small muted">· ${esc(sample.st.name)}</span></h2>
-      ${img ? `<div class="card report-preview"><img alt="Örnek karne" src="${reportCanvas(e, sample.st, sample.r, o).toDataURL('image/jpeg', 0.85)}"></div>`
-        : `<div class="card pad small" style="white-space:pre-wrap">${esc(parentMessage(e, sample.st, sample.r))}</div>`}
-      ${img ? `<button class="btn block" style="margin-top:12px" data-act="send-all" data-id="${id}">${isPhone() ? '📤 Tüm karneleri paylaş / kaydet' : '⬇︎ Tüm karneleri indir'} (${st.rows.length})</button>` : ''}
-      <h2>Öğrenciler · ${sent}/${st.rows.length} gönderildi</h2>
-      <div class="card list">${ordered.map((x) => `<div>
-        <div class="grow"><div>${x.r.sentAt ? '<span style="color:var(--ok)">✓</span> ' : ''}${esc(x.st.name)}</div>
-          <div class="sub">${fmt(x.m)} ${Store.mainLabel(e).toLocaleLowerCase('tr-TR')} · veli kodu ${fmtCode(x.st.parentCode)}${x.r.sentAt ? ' · gönderildi ' + new Date(x.r.sentAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : ''}</div></div>
-        ${sendButtons(e, x.st, x.r, 'row')}</div>`).join('')}</div>`;
-  }
 
   // ---------- Sınav analizi ----------
   const difficulty = (rate) => (rate >= 0.7 ? ['Kolay', 'ok'] : rate >= 0.4 ? ['Orta', 'warn'] : ['Zor', 'bad']);
@@ -1196,7 +1041,7 @@
       <div class="card pad">${cloud?.email ? `
         <div class="row"><div class="grow"><b>${esc(cloud.name || cloud.email)}</b>${cloud.name ? `<div class="small muted">${esc(cloud.email)}</div>` : ''}<div class="small muted" id="sync-status">${esc(cloud.status)}</div></div>
           <button class="btn small" data-act="logout">Çıkış yap</button></div>
-        <button class="btn block" style="margin-top:12px" data-act="edit-name">✎ Adımı ${cloud.name ? 'değiştir' : 'ekle'} (velilere giden mesajlarda imza)</button>
+        <button class="btn block" style="margin-top:12px" data-act="edit-name">✎ Adımı ${cloud.name ? 'değiştir' : 'ekle'} (veli sayfasında görünür)</button>
         <p class="small muted" style="margin-bottom:0">Veriler bu hesapta bulutta saklanır. Aynı hesapla telefondan ve bilgisayardan girebilirsiniz.</p>`
         : '<p class="small muted" style="margin:0">Bulut bağlantısı kurulamadı; veriler şimdilik yalnızca bu cihazda.</p>'}</div>
       ${cloud?.isAdmin && cloud?.canCreateUsers ? `<h2>Kullanıcı yönetimi</h2><div class="card pad"><p class="small muted" style="margin-top:0">Yeni kullanıcıların e-posta adresini ve giriş şifresini tanımlayın.</p><button class="btn primary block" data-act="create-user">+ Yeni kullanıcı oluştur</button></div>` : ''}
@@ -1405,7 +1250,7 @@
       case 'papers': html = Papers.libraryView(); break;
       case 'analytics': html = analyticsView(); break;
       case 'topics': setTop('Konu kütüphanesi', id ? `#/exam/${id}/key` : '#/settings'); html = Topics.libraryView(); break;
-      case 'exam': html = b === 'key' ? keyView(id, +c || 0) : b === 'stats' ? statsView(id, +c || 0) : b === 'send' ? sendView(id) : examView(id); break;
+      case 'exam': html = b === 'key' ? keyView(id, +c || 0) : b === 'stats' ? statsView(id, +c || 0) : examView(id); break;
       case 'result': html = resultView(id, +b); break;
       case 'settings': html = settingsView(); break;
       default: html = classesView();
@@ -1428,23 +1273,6 @@
     if (filter) { examClassFilter = filter.dataset.examClass; updateExamResults(); return; }
     if (ev.target.closest('[data-reset-exams]')) {
       examClassFilter = ''; examSearch = ''; $('#exam-search').value = ''; updateExamResults(); return;
-    }
-    const sent = ev.target.closest('[data-sent]');
-    if (sent) {
-      // Bağlantı yeni sekmede/uygulamada açılır; burada yalnızca gönderildi olarak işaretle
-      Store.markSent(+sent.dataset.e, +sent.dataset.s, sent.dataset.sent);
-      setTimeout(() => render(true), 300);
-      return;
-    }
-    const img = ev.target.closest('[data-img]');
-    if (img) { sendImage(img.dataset.img, +img.dataset.e, +img.dataset.s); return; }
-    const fmtBtn = ev.target.closest('[data-fmt]');
-    if (fmtBtn) {
-      const o = sendOpts();
-      o.format = fmtBtn.dataset.fmt;
-      try { localStorage.setItem(SEND_KEY, JSON.stringify(o)); } catch (e) { /* yok say */ }
-      render(true);
-      return;
     }
     const go = ev.target.closest('[data-go]');
     if (go) { location.hash = go.dataset.go; return; }
@@ -1506,11 +1334,10 @@
       case 'del-result': confirmBox('Sonuç silinsin mi?', 'Öğrencinin bu sınavdaki sonucu silinecek.', 'Sil', () => { Store.deleteResult(+d.e, +d.s); location.hash = `#/exam/${d.e}`; }); break;
       case 'csv': exportCSV(id); break;
       case 'save-meta': saveMeta(id); break;
-      case 'send-all': sendAllImages(id); break;
       case 'q-detail': questionDetail(id, +d.b || 0, +d.q); break;
       case 'checked': Store.clearUncertain(+d.e, +d.s); render(true); break;
       case 'edit-name':
-        modal('Adınız', `<label class="field"><span>Ad Soyad (velilere giden mesajların sonuna eklenir)</span><input type="text" name="name" value="${esc(window.Cloud?.name || '')}" placeholder="Örn. Ahmet Yılmaz (Matematik Öğretmeni)"></label>`,
+        modal('Adınız', `<label class="field"><span>Ad Soyad (velilerin sonuç sayfasında görünür)</span><input type="text" name="name" value="${esc(window.Cloud?.name || '')}" placeholder="Örn. Ahmet Yılmaz (Matematik Öğretmeni)"></label>`,
           (fd) => { window.Cloud?.setName(fd.get('name').trim()).then(() => toast('Kaydedildi')); });
         break;
       case 'create-user': {
@@ -1547,13 +1374,6 @@
     if (ev.target.id === 'exam-search') { examSearch = ev.target.value; updateExamResults(); }
   });
   view.addEventListener('change', (ev) => {
-    if (ev.target.dataset.opt) {
-      const o = sendOpts();
-      o[ev.target.dataset.opt] = ev.target.checked;
-      try { localStorage.setItem(SEND_KEY, JSON.stringify(o)); } catch (e) { /* yok say */ }
-      render(true);
-      return;
-    }
     if (ev.target.id !== 'restore') return;
     const file = ev.target.files[0];
     if (!file) return;

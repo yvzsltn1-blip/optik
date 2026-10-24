@@ -258,8 +258,6 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; font-varian
 .optbar > b { width: 22px; text-align: center; }
 .optbar > b.right { color: var(--ok); }
 .optbar > span { min-width: 56px; text-align: right; font-variant-numeric: tabular-nums; }
-.report-preview { padding: 0; }
-.report-preview img { display: block; width: 100%; height: auto; }
 .optbar > .grow { flex: 1; }
 .add-more { margin-top: 12px; }
 .codes-print { display: flex; margin: 8px 0 0 auto; }
@@ -305,7 +303,6 @@ input[type=checkbox] { width: 19px; height: 19px; accent-color: var(--accent); f
 input[type=text], input[type=number], input[type=date], input[type=email], input[type=password], select, textarea { min-height: 48px; }
 .sheet-modal { padding: 26px 24px calc(24px + var(--safe-b)); border-radius: 26px 26px 0 0; box-shadow: 0 16px 80px #10233830; }
 .sheet-modal h3 { letter-spacing: -.5px; font-size: 23px; }
-.report-preview { max-width: 680px; margin-inline: auto; background: #f9fafb; border-radius: 12px; box-shadow: 0 8px 32px #142c420c; }
 .eyebrow { display: block; font-size: 10px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; color: var(--muted); }
 .page-intro { margin: 0 0 24px; }
 .page-intro h2 { font-size: clamp(26px, 4vw, 34px); margin: 7px 0; letter-spacing: -1px; line-height: 1.2; overflow-wrap: anywhere; }
@@ -366,9 +363,6 @@ input[type=text], input[type=number], input[type=date], input[type=email], input
 .matrix th { min-width: 28px; }
 .matrix th button { border: 0; background: none; color: inherit; font: inherit; min-height: 40px; min-width: 30px; cursor: pointer; }
 .tbl .question-link { color: var(--accent); background: var(--soft-accent); border: 0; min-width: 40px; min-height: 40px; border-radius: 8px; font-weight: 650; cursor: pointer; }
-.report-options { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
-.report-options label { min-height: 48px; font-size: 13px; }
-.report-options p { grid-column: 1 / -1; }
 .result-identity { display: flex; gap: 14px; align-items: center; margin-bottom: 22px; }
 .student-avatar { width: 50px; height: 50px; display: flex; flex-shrink: 0; align-items: center; justify-content: center; background: var(--soft-accent); color: var(--accent); border-radius: 15px; font-size: 17px; font-weight: 650; }
 .result-identity h2 { margin: 0; font-size: 22px; letter-spacing: -.6px; }
@@ -405,7 +399,6 @@ input[type=text], input[type=number], input[type=date], input[type=email], input
   #view[data-page=send] > .list > div { flex-wrap: wrap; }
   #view[data-page=send] > .list > div > .row { width: 100%; }
   #view[data-page=send] > .list > div > .row > * { flex: 1; }
-  .report-options { grid-template-columns: 1fr; }
   .detail-disclosure > summary span { display: block; margin: 4px 0 0 18px; }
 }
 @media (max-width: 360px) {

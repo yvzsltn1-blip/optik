@@ -24,7 +24,7 @@ with sync_playwright() as p:
     checks = []
     for width in [320,375,390,430,768,1440]:
         page.set_viewport_size({'width':width,'height':900})
-        for route in ['stats','send','', 'key']:
+        for route in ['stats','', 'key']:
             page.goto(base+'#/exam/'+exam_id+('/'+route if route else ''))
             page.wait_for_function('(expected) => document.querySelector("#view").dataset.page === expected', arg=route or 'exam')
             overflow = page.evaluate('document.documentElement.scrollWidth > innerWidth')
@@ -42,16 +42,6 @@ with sync_playwright() as p:
     page.locator('#modal [data-close]').last.click()
     page.locator('summary').last.click()
     assert not page.evaluate('document.documentElement.scrollWidth > innerWidth'), 'expanded table overflow'
-    page.goto(base+'#/exam/'+exam_id+'/send')
-    page.locator('.report-preview img').wait_for()
-    page.screenshot(path=str(out/'send-mobile.png'), full_page=True)
-    image = page.locator('.report-preview img').get_attribute('src')
-    (out/'report.jpg').write_bytes(base64.b64decode(image.split(',')[1]))
-    page.locator('[data-opt="rank"]').check()
-    page.locator('[data-fmt="text"]').click()
-    assert page.locator('.report-preview').count() == 0
-    page.locator('[data-fmt="image"]').click()
-    assert page.locator('.report-preview').count() == 1
     student_id = page.evaluate('Store.students(Store.getExam('+exam_id+').classId)[0].id')
     page.goto(base+f'#/result/{exam_id}/{student_id}')
     page.locator('.result-score').wait_for()
@@ -63,5 +53,5 @@ with sync_playwright() as p:
     page.set_viewport_size({'width':390,'height':844})
     page.screenshot(path=str(out/'analysis-dark.png'), full_page=True)
     assert not errors, errors
-    print(json.dumps({'checks':checks,'interactions':'question modal, table, matrix, report settings, format switch passed','errors':errors},ensure_ascii=False))
+    print(json.dumps({'checks':checks,'interactions':'question modal, table, matrix passed','errors':errors},ensure_ascii=False))
     browser.close()

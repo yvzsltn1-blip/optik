@@ -1,6 +1,6 @@
 // Her yayında bu değer ve release.json birlikte değiştirilir.
 (() => {
-  const VERSION = '2026-10-24.4';
+  const VERSION = '2026-10-24.5';
   let pending = '', remaining = 30, checking = false, refreshing = false;
   let lastTick = 0;
   const banner = document.createElement('aside');

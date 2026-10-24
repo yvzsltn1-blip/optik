@@ -200,8 +200,6 @@ const Store = (() => {
     r.uncertain = uncertain;
     if (manual) r.manual = true; else delete r.manual;
     r.scannedAt = new Date().toISOString();
-    delete r.sentAt; // sonuç değişti, veliye yeniden gönderilmeli
-    delete r.sentVia;
     save();
     emit('put', 'results', r);
     setAbsent(examId, studentId, false);
@@ -221,21 +219,10 @@ const Store = (() => {
     const r = getResult(examId, studentId);
     if (!r) return;
     r.booklet = booklet;
-    delete r.sentAt;
-    delete r.sentVia;
     save();
     emit('put', 'results', r);
   }
 
-  // Sonucun veliye gönderildiğini işaretler (kanal: 'wa' | 'sms')
-  function markSent(examId, studentId, channel) {
-    const r = getResult(examId, studentId);
-    if (!r) return;
-    r.sentAt = new Date().toISOString();
-    r.sentVia = channel;
-    save();
-    emit('put', 'results', r);
-  }
   function deleteResult(examId, studentId) {
     const r = getResult(examId, studentId);
     if (r) emit('del', 'results', r);
@@ -371,7 +358,7 @@ const Store = (() => {
     allStudents: () => db.students,
     exams, getExam, saveExam, deleteExam, isAbsent, roster, setAbsent,
     papers, getPaper, examPapers, newPaperId, savePaper, deletePaper,
-    results, studentResults, getResult, saveResult, deleteResult, markSent,
+    results, studentResults, getResult, saveResult, deleteResult,
     score, scoreResult, mainScore, mainLabel, usesPoints, examTopics, topicScores, clearUncertain, bookletCount, bookletOf, keyFor, setKey, keyEmpty, setBooklet, exportJSON, importJSON,
     setSink, isEmpty, all, setCollection, clearLocal,
   };
