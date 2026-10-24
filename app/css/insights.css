@@ -27,10 +27,37 @@
 #view[data-page=exams] .exam-status { font-size:10px; gap:5px; }
 #view[data-page=exams] .exam-progress { height:2px; margin-top:13px; }
 @media (hover:hover) { #view[data-page=exams] .exam-card:hover { border-color:var(--class-color); transform:translateY(-2px); transition:transform .18s; } }
-.analytics-filters { display:grid; grid-template-columns:1fr 2fr; gap:12px; margin:24px 0; }
-.analytics-filters label { min-width:0; }
-.analytics-filters label > span { display:block; margin:0 2px 7px; font-size:11px; color:var(--muted); }
-.analytics-filters select { min-width:0; max-width:100%; text-overflow:ellipsis; background:var(--card); border-radius:12px; }
+.analytics-filters { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.6fr); gap:12px; margin:24px 0; }
+.filter-trigger { position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-width:0; padding:12px 40px 12px 16px; border:1px solid var(--line); border-radius:16px; background:var(--card); text-align:left; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+.filter-trigger > span { font-size:10px; letter-spacing:1.2px; text-transform:uppercase; font-weight:650; color:var(--muted); }
+.filter-trigger > b { max-width:100%; font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.filter-trigger > em { position:absolute; top:10px; right:12px; min-width:20px; height:20px; padding:0 6px; border-radius:99px; background:var(--accent); color:var(--card); font:700 11px/20px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; text-align:center; }
+.filter-trigger > i { position:absolute; right:16px; bottom:17px; width:8px; height:8px; border-right:2px solid var(--muted); border-bottom:2px solid var(--muted); transform:rotate(45deg); }
+.filter-trigger.on { border-color:color-mix(in srgb,var(--accent) 45%,var(--line)); background:color-mix(in srgb,var(--soft-accent) 55%,var(--card)); }
+@media (hover:hover) { .filter-trigger:hover { border-color:var(--accent); box-shadow:0 4px 16px #10233810; } }
+/* Çoklu seçim penceresi */
+.pick-hint { margin:-6px 0 16px; font-size:13px; line-height:1.5; color:var(--muted); }
+.pick-chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+.pick-chip { min-height:38px; padding:8px 14px; border:1px solid var(--line); border-radius:99px; background:var(--card); font-size:13px; font-weight:600; cursor:pointer; }
+.pick-chip.on { border-color:var(--accent); background:var(--accent); color:var(--card); }
+.pick-search { width:100%; min-height:44px; margin-bottom:12px; padding:10px 14px; border:1px solid var(--line); border-radius:12px; background:var(--bg); font-size:16px; }
+.pick-section { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin:16px 2px 8px; font-size:11px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:var(--muted); }
+.pick-section small { font-size:11px; letter-spacing:0; text-transform:none; font-weight:400; }
+.pick-list { display:flex; flex-direction:column; gap:8px; max-height:46vh; overflow:auto; padding:2px; }
+.pick-row { position:relative; display:flex; align-items:center; gap:12px; min-height:58px; padding:10px 14px; border:1.5px solid var(--line); border-radius:14px; cursor:pointer; transition:border-color .15s, background .15s; }
+.pick-row input { position:absolute; opacity:0; pointer-events:none; }
+.pick-row:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:2px; }
+.pick-badge { flex-shrink:0; min-width:46px; padding:6px 8px; border-radius:9px; background:var(--class-soft, var(--soft-accent)); color:var(--class-color, var(--accent)); font-size:13px; font-weight:700; text-align:center; }
+.pick-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.pick-text b { font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pick-text small { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pick-check { flex-shrink:0; display:grid; place-items:center; width:26px; height:26px; border:2px solid var(--line); border-radius:50%; transition:background .15s, border-color .15s; }
+.pick-check svg { width:16px; height:16px; fill:none; stroke:var(--card); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; opacity:0; transform:scale(.6); transition:opacity .15s, transform .15s; }
+.pick-row:has(input:checked) { border-color:var(--class-color, var(--accent)); background:var(--class-soft, var(--soft-accent)); }
+.pick-row:has(input:checked) .pick-check { border-color:var(--class-color, var(--accent)); background:var(--class-color, var(--accent)); }
+.pick-row:has(input:checked) .pick-check svg { opacity:1; transform:none; }
+.pick-row:has(input:indeterminate) .pick-check { border-color:var(--accent); background:linear-gradient(var(--accent),var(--accent)) center/10px 2.5px no-repeat; }
+.pick-clear { display:block; margin:12px auto 0; padding:8px 12px; border:0; background:none; color:var(--muted); font-size:13px; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
 .analytics-hero { display:flex; justify-content:space-between; align-items:center; gap:24px; padding:30px; border-radius:22px; color:#f3f5ed; background:radial-gradient(ellipse at top right,#456b5f55,transparent 65%),#1c3532; }
 .analytics-hero .eyebrow { font-size:10px; letter-spacing:1.8px; color:#b7cebf; }
 .analytics-value { font:400 68px/1.2 Georgia,serif; letter-spacing:-3px; margin:10px 0; font-variant-numeric:tabular-nums; }
@@ -125,8 +152,10 @@
   .exam-overview { gap:18px; font-size:10px; }.exam-overview b { font-size:16px; }
   #view[data-page=exams] .exam-card { padding:18px 20px 16px; }
   #view[data-page=exams] .exam-card h3 { font-size:18px; }
-  .analytics-filters { grid-template-columns:minmax(0,1fr) minmax(0,1.7fr); gap:9px; }
-  .analytics-filters select { padding:11px 8px; font-size:14px; }
+  .analytics-filters { gap:9px; }
+  .filter-trigger { padding:11px 30px 11px 13px; border-radius:14px; }
+  .filter-trigger > b { font-size:14px; }
+  .filter-trigger > i { right:12px; }
   .analytics-hero { padding:24px; flex-direction:column; align-items:stretch; gap:20px; }
   .analytics-value { font-size:62px; }
   .analytics-hero-detail { padding-top:16px; border-top:1px solid #ffffff25; gap:40px; }

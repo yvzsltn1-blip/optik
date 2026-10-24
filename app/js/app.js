@@ -1230,49 +1230,127 @@
   }
 
   // ---------- Genel istatistikler ----------
-  // analyticsClass: '' | sınıf kimliği | 'g5' (tüm 5. sınıflar)
-  // analyticsExam: '' | sınav kimliği | 'n:5|a' (aynı düzeydeki sınıfların aynı adlı sınavları)
-  let analyticsClass = '', analyticsExam = '';
+  // analyticsClasses / analyticsExams: seçili sınıf ve sınav kimlikleri; boş liste = hepsi
+  let analyticsClasses = [], analyticsExams = [];
   const gradeOfClass = (c) => c?.name.match(/^\s*(\d+)/)?.[1] || '';
-  function analyticsView() {
-    setTop('İstatistikler', null);
+  // Ortak sınav: aynı sınıf düzeyinde aynı adı taşıyan sınavlar
+  const commonKey = (e) => { const g = gradeOfClass(Store.getClass(e.classId)); return g ? `n:${g}|${e.name.trim().toLocaleLowerCase('tr-TR')}` : `e:${e.id}`; };
+  function analyticsGrades() {
     const grades = new Map();
     for (const c of Store.classes()) {
       const g = gradeOfClass(c);
       if (g) grades.set(g, [...(grades.get(g) || []), c]);
     }
     for (const [g, list] of grades) if (list.length < 2) grades.delete(g);
-    const gradeSel = analyticsClass.startsWith('g') ? analyticsClass.slice(1) : '';
-    if (gradeSel ? !grades.has(gradeSel) : analyticsClass && !Store.getClass(+analyticsClass)) analyticsClass = '';
-    const classIds = !analyticsClass ? null : gradeSel ? grades.get(gradeSel).map(c => c.id) : [+analyticsClass];
-    const available = Store.exams().filter(e => !classIds || classIds.includes(e.classId));
-    // Ortak sınav: aynı sınıf düzeyinde, aynı adı taşıyan ve en az iki sınıfta yapılmış sınavlar
+    return grades;
+  }
+  const analyticsAvailable = () => Store.exams().filter(e => !analyticsClasses.length || analyticsClasses.includes(e.classId));
+  // En az iki sınıfta yapılmış ortak sınavlar
+  function analyticsCommon(exams) {
     const common = new Map();
-    if (!classIds || gradeSel) for (const e of available) {
-      const g = gradeOfClass(Store.getClass(e.classId));
-      if (!g) continue;
-      const key = `n:${g}|${e.name.trim().toLocaleLowerCase('tr-TR')}`;
+    for (const e of exams) {
+      const key = commonKey(e);
       if (!common.has(key)) common.set(key, { key, name: e.name.trim(), exams: [] });
       common.get(key).exams.push(e);
     }
     for (const [key, group] of common) if (new Set(group.exams.map(e => e.classId)).size < 2) common.delete(key);
-    const commonSel = common.get(analyticsExam);
-    if (analyticsExam && !commonSel && !available.some(e => e.id === +analyticsExam)) analyticsExam = '';
-    const examIds = commonSel ? commonSel.exams.map(e => e.id) : analyticsExam ? [+analyticsExam] : null;
-    const data = Analytics.summarize(classIds, examIds);
+    return common;
+  }
+  const pickCheck = '<i class="pick-check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 12.5 4 4 8-9"/></svg></i>';
+  function analyticsClassPicker() {
+    const grades = analyticsGrades();
+    const form = modal('Sınıf seçin', `
+      <p class="pick-hint">İstediğiniz sınıfları işaretleyin. Hiçbirini seçmezseniz tüm sınıflar birlikte gösterilir.</p>
+      ${grades.size ? `<div class="pick-chips">${[...grades].map(([g, list]) => `<button type="button" class="pick-chip" data-grade="${list.map(c => c.id).join(',')}">Tüm ${g}. sınıflar</button>`).join('')}</div>` : ''}
+      <div class="pick-list">${Store.classes().map(c => `<label class="pick-row" style="${classColor(c.id)}">
+        <input type="checkbox" name="cls" value="${c.id}" ${analyticsClasses.includes(c.id) ? 'checked' : ''}><span class="pick-badge">${esc(c.name)}</span>
+        <span class="pick-text"><b>${esc(c.name)}</b><small>${Store.students(c.id).length} öğrenci · ${Store.exams(c.id).length} sınav</small></span>${pickCheck}</label>`).join('')}</div>
+      <button type="button" class="pick-clear" data-pick-clear>Seçimi temizle</button>`,
+    (fd) => {
+      analyticsClasses = fd.getAll('cls').map(Number);
+      const available = analyticsAvailable().map(e => e.id);
+      analyticsExams = analyticsExams.filter(id => available.includes(id));
+      render(true);
+    }, 'Uygula');
+    pickerSetup(form);
+  }
+  function analyticsExamPicker() {
+    const available = analyticsAvailable();
+    if (!available.length) return toast('Seçili sınıflarda sınav yok');
+    const common = analyticsCommon(available);
+    const className = id => esc(Store.getClass(id)?.name || '');
+    const examRow = e => `<label class="pick-row" style="${classColor(e.classId)}" data-search="${esc(`${e.name} ${Store.getClass(e.classId)?.name || ''}`.toLocaleLowerCase('tr-TR'))}">
+        <input type="checkbox" name="exam" value="${e.id}" data-group="${esc(commonKey(e))}" ${analyticsExams.includes(e.id) ? 'checked' : ''}><span class="pick-badge">${className(e.classId)}</span>
+        <span class="pick-text"><b>${esc(e.name)}</b><small>${fmtDate(e.date)} · ${Store.results(e.id).length} form</small></span>${pickCheck}</label>`;
+    const form = modal('Sınav seçin', `
+      <p class="pick-hint">Birden çok sınav seçebilirsiniz. Hiçbirini seçmezseniz tüm sınavlar gösterilir.</p>
+      ${available.length > 8 ? '<input type="search" class="pick-search" placeholder="Sınav ya da sınıf ara">' : ''}
+      ${common.size ? `<div class="pick-section">Ortak sınavlar<small>Sınıflar birlikte değerlendirilir</small></div><div class="pick-list">${[...common.values()].map(g => `<label class="pick-row pick-common" data-search="${esc(g.name.toLocaleLowerCase('tr-TR'))}">
+        <input type="checkbox" data-common="${esc(g.key)}"><span class="pick-badge">${new Set(g.exams.map(e => e.classId)).size} sınıf</span>
+        <span class="pick-text"><b>${esc(g.name)}</b><small>${Store.classes().filter(c => g.exams.some(e => e.classId === c.id)).map(c => esc(c.name)).join(', ')}</small></span>${pickCheck}</label>`).join('')}</div>
+      <div class="pick-section">Sınıf sınavları</div>` : ''}
+      <div class="pick-list">${available.map(examRow).join('')}</div>
+      <button type="button" class="pick-clear" data-pick-clear>Seçimi temizle</button>`,
+    (fd) => { analyticsExams = fd.getAll('exam').map(Number); render(true); }, 'Uygula');
+    pickerSetup(form);
+  }
+  // Sınıf düzeyi düğmeleri ve ortak sınav satırları kendi satırlarını birlikte işaretler
+  function pickerSetup(form) {
+    const boxes = [...form.querySelectorAll('input[name]')];
+    const sync = () => {
+      form.querySelectorAll('[data-grade]').forEach(chip => {
+        const ids = chip.dataset.grade.split(',');
+        chip.classList.toggle('on', boxes.filter(b => ids.includes(b.value)).every(b => b.checked));
+      });
+      form.querySelectorAll('[data-common]').forEach(box => {
+        const own = boxes.filter(b => b.dataset.group === box.dataset.common);
+        box.checked = own.every(b => b.checked);
+        box.indeterminate = !box.checked && own.some(b => b.checked);
+      });
+    };
+    form.addEventListener('click', (ev) => {
+      const chip = ev.target.closest('[data-grade]');
+      if (chip) {
+        const ids = chip.dataset.grade.split(','), on = !chip.classList.contains('on');
+        boxes.forEach(b => { if (ids.includes(b.value)) b.checked = on; });
+        sync();
+      }
+      if (ev.target.closest('[data-pick-clear]')) { boxes.forEach(b => { b.checked = false; }); sync(); }
+    });
+    form.addEventListener('change', (ev) => {
+      const key = ev.target.dataset.common;
+      if (key) boxes.forEach(b => { if (b.dataset.group === key) b.checked = ev.target.checked; });
+      sync();
+    });
+    form.querySelector('.pick-search')?.addEventListener('input', (ev) => {
+      const q = ev.target.value.trim().toLocaleLowerCase('tr-TR');
+      form.querySelectorAll('[data-search]').forEach(row => { row.hidden = !!q && !row.dataset.search.includes(q); });
+    });
+    sync();
+    document.activeElement?.blur(); // telefonda klavye açılmasın
+  }
+  function analyticsView() {
+    setTop('İstatistikler', null);
+    const grades = analyticsGrades();
+    analyticsClasses = analyticsClasses.filter(id => Store.getClass(id));
+    const classIds = analyticsClasses.length ? analyticsClasses : null;
+    const available = analyticsAvailable();
+    analyticsExams = analyticsExams.filter(id => available.some(e => e.id === id));
+    const examIds = analyticsExams.length ? analyticsExams : null;
+    const selected = examIds ? available.filter(e => examIds.includes(e.id)) : available;
+    // Seçimde aynı ortak sınavı paylaşan sınavların soruları birlikte değerlendirilir
+    const common = analyticsCommon(selected);
+    const commonSel = examIds && common.size === 1 && [...common.values()][0].exams.length === selected.length ? [...common.values()][0] : null;
+    const gradeSel = classIds && [...grades].find(([, list]) => list.length === classIds.length && list.every(c => classIds.includes(c.id)))?.[0];
+    const data = Analytics.summarize(classIds, examIds, e => common.has(commonKey(e)) ? commonKey(e) : `e:${e.id}`);
     const score = n => n == null ? '—' : fmt(n, 1);
     const className = id => esc(Store.getClass(id)?.name || '');
-    const classNames = exams => Store.classes().filter(c => exams.some(e => e.classId === c.id)).map(c => esc(c.name)).join(', ');
     const head = (title, note = '') => `<div class="insight-heading"><h2>${title}</h2>${note ? `<span>${note}</span>` : ''}</div>`;
-    const classOption = c => `<option value="${c.id}" ${analyticsClass === String(c.id) ? 'selected' : ''}>${esc(c.name)}</option>`;
-    const examOption = e => `<option value="${e.id}" ${analyticsExam === String(e.id) ? 'selected' : ''}>${className(e.classId)} · ${esc(e.name)}</option>`;
+    const classLabel = !classIds ? 'Tüm sınıflar' : gradeSel ? `Tüm ${gradeSel}. sınıflar` : Store.classes().filter(c => classIds.includes(c.id)).map(c => esc(c.name)).join(', ');
+    const examLabel = !examIds ? 'Tüm sınavlar' : commonSel ? `${esc(commonSel.name)} · ortak` : selected.length === 1 ? `${className(selected[0].classId)} · ${esc(selected[0].name)}` : `${selected.length} sınav`;
+    const trigger = (act, label, value, count) => `<button type="button" class="filter-trigger ${count ? 'on' : ''}" data-act="${act}"><span>${label}</span><b>${value}</b>${count > 1 ? `<em>${count}</em>` : ''}<i aria-hidden="true"></i></button>`;
     const intro = `<div class="exam-editorial"><div><span class="eyebrow">ÖĞRENMEYE GENEL BAKIŞ</span><h2>Veriden içgörüye<span>.</span></h2><p>Sınıfınızın güçlü yanlarını ve ihtiyaçlarını keşfedin.</p></div></div>
-      <div class="analytics-filters"><label><span>Sınıf</span><select id="analytics-class"><option value="">Tüm sınıflar</option>${grades.size
-        ? `<optgroup label="Sınıf düzeyi">${[...grades].map(([g, list]) => `<option value="g${g}" ${gradeSel === g ? 'selected' : ''}>Tüm ${g}. sınıflar (${list.map(c => esc(c.name)).join(', ')})</option>`).join('')}</optgroup><optgroup label="Sınıflar">${Store.classes().map(classOption).join('')}</optgroup>`
-        : Store.classes().map(classOption).join('')}</select></label>
-      <label><span>Sınav</span><select id="analytics-exam"><option value="">Tüm sınavlar</option>${common.size
-        ? `<optgroup label="Ortak sınavlar (sınıflar birlikte)">${[...common.values()].map(g => `<option value="${esc(g.key)}" ${analyticsExam === g.key ? 'selected' : ''}>${esc(g.name)} · ${classNames(g.exams)}</option>`).join('')}</optgroup><optgroup label="Sınıf sınavları">${available.map(examOption).join('')}</optgroup>`
-        : available.map(examOption).join('')}</select></label></div>`;
+      <div class="analytics-filters">${trigger('pick-classes', 'Sınıf', classLabel, analyticsClasses.length)}${trigger('pick-exams', 'Sınav', examLabel, analyticsExams.length)}</div>`;
     const exclusion = data.excluded ? `<div class="analytics-note">${data.excluded} form analize alınmadı: ${[
       data.excludedReasons.key ? `${data.excludedReasons.key} cevap anahtarı eksik` : '',
       data.excludedReasons.booklet ? `${data.excludedReasons.booklet} kitapçığı belirsiz` : '',
@@ -1285,7 +1363,7 @@
     const distMax = Math.max(...data.distribution, 1);
     const rankRow = row => `<a class="ranking-row" href="#/student/${row.student.id}"><span class="rank-position ${row.rank <= 3 ? 'rank-top' : ''}">${row.rank.toString().padStart(2, '0')}</span><span class="ranking-person"><b>${esc(row.student.name)}</b><small>${className(row.student.classId)} · ${row.count}/${row.expected} sınav değerlendirildi</small></span><strong>${score(row.average)}<small>/100</small></strong></a>`;
     return `${intro}${exclusion}
-      <section class="analytics-hero"><div><span class="eyebrow">${commonSel ? `${esc(commonSel.name.toLocaleUpperCase('tr-TR'))} · ORTAK ORTALAMA` : gradeSel ? `${gradeSel}. SINIFLAR ORTALAMASI` : analyticsClass ? 'SINIF ORTALAMASI' : 'GENEL ORTALAMA'}</span><div class="analytics-value">${score(data.average)}<span>/100</span></div><p>${data.entries.length} değerlendirilmiş form · ${data.summaries.filter(s => s.count).length} sınav</p></div><div class="analytics-hero-detail"><span>Ortanca değer<strong>${score(data.median)}</strong></span><span>Okuma oranı<strong>%${Math.round(data.read / Math.max(1, data.expected) * 100)}</strong></span></div></section>
+      <section class="analytics-hero"><div><span class="eyebrow">${commonSel ? `${esc(commonSel.name.toLocaleUpperCase('tr-TR'))} · ORTAK ORTALAMA` : gradeSel ? `${gradeSel}. SINIFLAR ORTALAMASI` : classIds?.length > 1 ? 'SEÇİLİ SINIFLAR ORTALAMASI' : classIds ? 'SINIF ORTALAMASI' : 'GENEL ORTALAMA'}</span><div class="analytics-value">${score(data.average)}<span>/100</span></div><p>${data.entries.length} değerlendirilmiş form · ${data.summaries.filter(s => s.count).length} sınav</p></div><div class="analytics-hero-detail"><span>Ortanca değer<strong>${score(data.median)}</strong></span><span>Okuma oranı<strong>%${Math.round(data.read / Math.max(1, data.expected) * 100)}</strong></span></div></section>
       <div class="analytics-kpis"><div><span>Öğrenci</span><b>${data.ranking.length}</b><small>sonucu değerlendirilen</small></div><div><span>Okunan form</span><b>${data.read}<small> / ${data.expected}</small></b><small>seçili sınavlarda</small></div><div><span>Doğru yanıt</span><b>%${Math.round(data.correct / totalAnswers * 100)}</b><small>${totalAnswers} yanıt üzerinden</small></div></div>
       <div class="insight-layout"><section class="insight-panel trend-panel">${head('Sınav ortalamaları', '100 üzerinden')}
         ${timeline.length > 1 ? `<div class="trend-summary"><strong>${trend >= 0 ? '+' : ''}${score(trend)}</strong><span>son iki sınav arasındaki fark</span></div>` : '<p class="insight-caption">Yeni sonuçlar eklendikçe sınavları karşılaştırabilirsiniz.</p>'}
@@ -1294,9 +1372,16 @@
         <p class="insight-caption">Son ${timeline.length} sınav, tarih sırasıyla. Farklı sınav ve katılımcılar sonuçları etkileyebilir.</p></section>
       <section class="insight-panel">${head('Başarı dağılımı', `${data.entries.length} form`)}<div class="distribution">${data.distribution.map((n, i) => `<div><span>${['0–19', '20–39', '40–59', '60–79', '80–100'][i]}</span><i><b style="width:${n / distMax * 100}%"></b></i><strong>${n}</strong></div>`).join('')}</div>
         <div class="answer-breakdown">${[['Doğru', data.correct, 'ok'], ['Yanlış', data.wrong, 'bad'], ['Boş', data.blank, 'muted']].map(([label, n, color]) => `<div><i style="background:var(--${color})"></i><span>${label}</span><b>${n}</b><small>%${Math.round(n / totalAnswers * 100)}</small></div>`).join('')}</div></section></div>
-      ${!analyticsClass || gradeSel ? `<section class="insight-panel">${head('Sınıflara bakış', commonSel ? esc(commonSel.name) : 'Form ortalamaları')}<div class="class-comparison">${data.classes.filter(c => !examIds || data.exams.some(e => e.classId === c.cls.id)).map(c => `<button data-analytics-class="${c.cls.id}" data-analytics-exam="${commonSel?.exams.find(e => e.classId === c.cls.id)?.id || ''}" style="${classColor(c.cls.id)}"><span class="class-badge">${esc(c.cls.name)}</span><span class="comparison-meter"><i style="width:${c.average || 0}%"></i></span><span><b>${score(c.average)}</b><small>${c.count} form</small></span></button>`).join('')}</div></section>` : ''}
+      ${!classIds || classIds.length > 1 ? `<section class="insight-panel">${head('Sınıflara bakış', commonSel ? esc(commonSel.name) : 'Form ortalamaları')}<div class="class-comparison">${data.classes.filter(c => !examIds || data.exams.some(e => e.classId === c.cls.id)).map(c => `<button data-analytics-class="${c.cls.id}" data-analytics-exam="${examIds ? selected.filter(e => e.classId === c.cls.id).map(e => e.id).join(',') : ''}" style="${classColor(c.cls.id)}"><span class="class-badge">${esc(c.cls.name)}</span><span class="comparison-meter"><i style="width:${c.average || 0}%"></i></span><span><b>${score(c.average)}</b><small>${c.count} form</small></span></button>`).join('')}</div></section>` : ''}
       <section class="insight-panel">${head('En çok yanlış yapılan sorular', 'Yanlış oranına göre')}
-        ${data.questions.length ? `<div class="difficult-questions">${data.questions.slice(0, 8).map(q => `<a class="difficult-question" href="#/exam/${q.exam.id}/stats/${q.booklet}"><span class="question-number">${q.q + 1}<small>SORU</small></span><span class="question-context"><b>${esc(q.exam.name)}</b><small>${className(q.exam.classId)}${Store.bookletCount(q.exam) > 1 ? ` · ${L[q.booklet]} kitapçığı` : ''} · ${q.wrong}/${q.total} yanlış · ${q.blank} boş</small><span class="question-error-bar"><i style="width:${q.wrong / q.total * 100}%"></i></span></span><strong>%${Math.round(q.wrong / q.total * 100)}</strong></a>`).join('')}</div><p class="insight-caption">Her soru kendi sınavı ve kitapçığı içinde değerlendirilir. Sınav analizini açmak için dokunun.</p>` : '<p class="insight-caption">Değerlendirilen formlarda yanlış yanıt bulunmuyor.</p>'}</section>
+        ${data.questions.length ? `<div class="difficult-questions">${data.questions.slice(0, 8).map(q => {
+          const merged = q.exams.length > 1;
+          const booklet = q.exams.some(e => Store.bookletCount(e) > 1) ? ` · ${L[q.booklet]} kitapçığı` : '';
+          // Ortak sınavda soru tüm sınıfların öğrencileri üzerinden; altında sınıf sınıf yanlış oranı
+          const where = merged ? [...q.byClass].map(([id, c]) => `${className(id)} %${Math.round(c.wrong / c.total * 100)}`).join(' · ') : className(q.exam.classId);
+          const body = `<span class="question-number">${q.q + 1}<small>SORU</small></span><span class="question-context"><b>${esc(q.exam.name)}</b><small>${where}${booklet} · ${q.wrong}/${q.total} yanlış · ${q.blank} boş</small><span class="question-error-bar"><i style="width:${q.wrong / q.total * 100}%"></i></span></span><strong>%${Math.round(q.wrong / q.total * 100)}</strong>`;
+          return merged ? `<div class="difficult-question">${body}</div>` : `<a class="difficult-question" href="#/exam/${q.exam.id}/stats/${q.booklet}">${body}</a>`;
+        }).join('')}</div><p class="insight-caption">${common.size ? 'Ortak sınavda her soru, sınava giren tüm sınıfların öğrencileri birlikte değerlendirilerek sıralanır.' : 'Her soru kendi sınavı ve kitapçığı içinde değerlendirilir. Sınav analizini açmak için dokunun.'}</p>` : '<p class="insight-caption">Değerlendirilen formlarda yanlış yanıt bulunmuyor.</p>'}</section>
       <section class="insight-panel">${head('Öğrenci sıralaması', `${data.ranking.length} öğrenci`)}<p class="insight-caption">Öğrencinin değerlendirilen sınavlarının ortalaması. Katılım sayıları farklı olabilir; eşit ortalamalar aynı sırayı paylaşır.</p><div class="ranking-list">${data.ranking.slice(0, 10).map(rankRow).join('')}</div>${data.ranking.length > 10 ? `<details class="ranking-more"><summary>Tüm öğrencileri göster (${data.ranking.length})</summary><div class="ranking-list">${data.ranking.slice(10).map(rankRow).join('')}</div></details>` : ''}</section>
       <section class="insight-panel">${head('Konu & kazanım analizi', 'En çok desteğe ihtiyaç duyulan')}${data.topics.length ? data.topics.slice(0, 8).map(t => `<a class="topic-insight" href="#/exam/${t.exam.id}/stats"><div><b>${esc(t.name)}</b><small>${className(t.exam.classId)} · ${esc(t.exam.name)} · ${t.students} form</small><span class="comparison-meter"><i style="width:${t.correct / t.total * 100}%"></i></span></div><strong>%${Math.round(t.correct / t.total * 100)}</strong></a>`).join('') : '<p class="insight-caption">Sınav ayarlarında konu ve soru aralıklarını tanımladığınızda kazanım başarıları burada görünür.</p>'}<p class="insight-caption">Konu eşleştirmesi A kitapçığına göre yapılır.</p></section>
       <details class="analytics-method"><summary>Bu değerler nasıl hesaplanıyor?</summary><p>Puanlı sınavlarda ağırlıklı puan; netli sınavlarda netin geçerli soru sayısına oranı kullanılır. Sonuçlar 0–100 aralığındadır ve yanlış götürme ayarı uygulanır. Genel ve sınıf ortalaması değerlendirilen formların eşit ağırlıklı ortalamasıdır; öğrenci sıralaması her öğrencinin sınav ortalamasına göre yapılır. Anahtarı boş sorular iptal kabul edilir. Katılınmayan sınavlar sıfır sayılmaz; sınav sayfasında “Girmeyecek” olarak ayrılan öğrenciler okuma oranına da katılmaz. Ortak sınav seçildiğinde aynı sınıf düzeyindeki aynı adlı sınavların tüm formları birlikte ortalanır. Kitapçığı belirsiz, okuması kontrol bekleyen veya değerlendirilebilir anahtarı olmayan formlar analize alınmaz. Okuma oranı bu formları da kapsar.</p></details>`;
@@ -1338,7 +1423,7 @@
 
   view.addEventListener('click', (ev) => {
     const analyticsFilter = ev.target.closest('[data-analytics-class]');
-    if (analyticsFilter) { analyticsClass = analyticsFilter.dataset.analyticsClass; analyticsExam = analyticsFilter.dataset.analyticsExam || ''; render(true); return; }
+    if (analyticsFilter) { analyticsClasses = [+analyticsFilter.dataset.analyticsClass]; analyticsExams = analyticsFilter.dataset.analyticsExam.split(',').filter(Boolean).map(Number); render(true); return; }
     const filter = ev.target.closest('[data-exam-class]');
     if (filter) { examClassFilter = filter.dataset.examClass; updateExamResults(); return; }
     if (ev.target.closest('[data-reset-exams]')) {
@@ -1377,6 +1462,8 @@
       case 'new-exam': examForm(null, d.class ? +d.class : null); break;
       case 'edit-exam': examForm(Store.getExam(id)); break;
       case 'copy-exam': copyExamForm(id); break;
+      case 'pick-classes': analyticsClassPicker(); break;
+      case 'pick-exams': analyticsExamPicker(); break;
       case 'absent': Store.setAbsent(id, +d.s, !!d.on); render(true); break;
       case 'del-exam': confirmBox('Sınav silinsin mi?', 'Bu sınavın tüm sonuçları silinecek.', 'Sil', () => { Store.deleteExam(id); location.hash = '#/exams'; }); break;
       case 'scan': {
@@ -1460,8 +1547,6 @@
     if (ev.target.id === 'exam-search') { examSearch = ev.target.value; updateExamResults(); }
   });
   view.addEventListener('change', (ev) => {
-    if (ev.target.id === 'analytics-class') { analyticsClass = ev.target.value; analyticsExam = ''; render(true); return; }
-    if (ev.target.id === 'analytics-exam') { analyticsExam = ev.target.value; render(true); return; }
     if (ev.target.dataset.opt) {
       const o = sendOpts();
       o[ev.target.dataset.opt] = ev.target.checked;
