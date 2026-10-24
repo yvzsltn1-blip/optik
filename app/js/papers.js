@@ -39,7 +39,7 @@ const Papers = (() => {
     if (list.length) {
       return list.map((p) => `<section class="paper-card">
         <div class="paper-card-head"><span class="paper-ico" aria-hidden="true">${ICON}</span>
-          <div class="grow"><span class="eyebrow">Sınav kâğıdı</span><b>${esc(p.title)}</b><small>${pageLabel(p)}${p.examIds.length > 1 ? ` · ${p.examIds.length} sınavda ortak` : ''}</small></div>
+          <div class="grow"><span class="eyebrow">Sınav kâğıdı</span><b>${esc(p.title)}</b><small>${pageLabel(p)}${p.examIds.length > 1 ? ` · ${p.examIds.length} sınavda` : ''}</small></div>
           <button class="btn small" data-paper-edit="${p.id}" data-exam="${exam.id}">Düzenle</button></div>
         <div class="paper-strip">${p.files.map((f, i) => `<button class="paper-thumb" data-paper-view="${p.id}" data-i="${i}" aria-label="${i + 1}. sayfayı aç">${thumb(f)}<span class="paper-pg">${i + 1}</span></button>`).join('')}</div>
         ${p.examIds.length > 1 ? classChips(p, exam.id) : ''}</section>`).join('');
@@ -49,7 +49,7 @@ const Papers = (() => {
     const count = Store.papers().length;
     return `<section class="paper-empty">
       <div class="paper-card-head"><span class="paper-ico" aria-hidden="true">${ICON}</span>
-        <div class="grow"><span class="eyebrow">Sınav kâğıdı</span><b>Soruları bu sınava ekleyin</b><small>PNG, JPG ya da PDF. Ortak sınavlarda bir kez yükleyip birden çok sınıfa bağlayabilirsiniz.</small></div></div>
+        <div class="grow"><span class="eyebrow">Sınav kâğıdı</span><b>Soruları bu sınava ekleyin</b><small>PNG, JPG ya da PDF yükleyin</small></div></div>
       ${twin ? `<button class="paper-twin" data-paper-link="${twin.id}" data-exam="${exam.id}"><span class="paper-twin-cover">${thumb(twin.files[0])}</span>
         <span class="grow"><b>${esc(twin.title)}</b><small>${linkedExams(twin).map(className).map(esc).join(', ')} sınav${twin.examIds.length > 1 ? 'larında' : 'ında'} yüklü</small></span><span class="paper-twin-add">+ Bu sınava bağla</span></button>` : ''}
       <div class="paper-empty-btns"><button class="btn primary" data-paper-new="${exam.id}">${ICON_UP} Dosya yükle</button>${count ? `<button class="btn" data-paper-pick="${exam.id}">Arşivden seç <span class="paper-n">${count}</span></button>` : ''}</div>

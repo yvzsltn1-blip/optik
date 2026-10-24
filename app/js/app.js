@@ -550,8 +550,8 @@
     return `
       <div class="small muted" style="margin:0 4px 10px">${esc(c.name)} · ${fmtDate(e.date)} · ${e.questionCount} soru · ${e.optionCount} şık · ${fmtLabel(e.format)}${e.penalty ? ` · ${e.penalty} yanlış 1 doğruyu götürür` : ''}${Store.usesPoints(e) ? ' · 100 üzerinden puan' : ''}</div>
       <button class="btn primary big" data-act="scan" data-id="${id}">📷 Optik okut</button>
-      <button class="btn block" style="margin-top:10px" data-act="pdf" data-id="${id}" ${all.length ? '' : 'disabled'}>📄 Optik formları PDF olarak al (${all.length} öğrenci)</button>
-      <button class="btn block" style="margin-top:10px" data-act="copy-exam" data-id="${id}">⧉ Diğer sınıflara kopyala</button>
+      <div class="exam-tools"><button class="btn" data-act="pdf" data-id="${id}" ${all.length ? '' : 'disabled'}><span>📄 Form PDF'i</span><small>${all.length} öğrenci</small></button>
+        <button class="btn" data-act="copy-exam" data-id="${id}"><span>⧉ Kopyala</span><small>diğer sınıflara</small></button></div>
       <a class="card pad row" href="#/exam/${id}/key" style="margin-top:12px;color:inherit">
         <div class="grow"><b>Cevap anahtarı${nb > 1 ? 'ları' : ''}</b><div class="small muted">${nb > 1
           ? counts.map((n, b) => `${L[b]}: ${n}/${e.questionCount}`).join(' · ')

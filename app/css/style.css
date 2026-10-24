@@ -80,6 +80,11 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: v
 .btn.big { width: 100%; padding: 16px; font-size: 18px; border-radius: 14px; }
 .btn.small { padding: 6px 10px; font-size: 13px; border-radius: 9px; }
 .btn.block { width: 100%; }
+/* Sınav sayfasında PDF ve kopyalama düğmeleri yan yana */
+.exam-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.exam-tools .btn { flex-direction: column; gap: 1px; min-width: 0; padding: 9px 10px; line-height: 1.25; }
+.exam-tools .btn span { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.exam-tools .btn small { font-size: 11px; font-weight: 500; opacity: .75; }
 .btn:disabled { opacity: .45; }
 .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
 
